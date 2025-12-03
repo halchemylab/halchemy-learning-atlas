@@ -1,1 +1,1 @@
-# self-learning-library
+# halchemy-learning-atlas
