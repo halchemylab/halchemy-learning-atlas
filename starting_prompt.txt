@@ -1,0 +1,267 @@
+You are an expert senior Python engineer, Streamlit developer, and technical writer.
+
+I want you to create a complete, production-quality MVP for a project called **Halchemy Library** and output the full repository structure and all file contents.
+
+## High-level concept
+
+Halchemy Library is an AI-assisted *book path* recommender focused on **learning**, not casual reading.
+
+Users don’t search by book title.  
+They tell the system what they want to learn (e.g., “habits”, “python”, “WWII history”, “Japanese cooking”), and interact with a **chat-style interface** that asks clarifying questions.
+
+After a short conversation, the system generates:
+
+1. A **sequence of 3–7 books** to learn the subject (simple → complex, or chronological, depending on domain)
+2. For each book:
+   - Title
+   - Author
+   - Short description (from metadata, not model hallucinations)
+   - Store URL
+   - Affiliate URL
+3. A final **“Hint:”** section with practical, domain-specific advice on how to get the most from that reading path for *skill adoption* (e.g., for habits: “Implement one small habit per week and keep a log…”).
+
+**Critical constraint:**  
+The system must **never hallucinate books.** It should only recommend books that exist in the curated CSV data.
+
+The app should be focused on **clarity, trust, and readability**, not AI gimmicks.
+
+---
+
+## Architecture requirements
+
+Create a repository with at least these files:
+
+- `app.py`  
+  - Main Streamlit application
+  - Chat-style UX using `st.chat_message` and `st.chat_input`
+  - Handles user conversation state and triggers recommendations
+
+- `books.py` (or `src/books.py` if you prefer a `src/` layout)  
+  - Utilities for loading and querying book metadata from a CSV
+  - Functions for filtering, scoring, and sequencing books
+
+- `data/books.csv`  
+  - Sample curated dataset of books (20–40 rows is enough for MVP)
+  - Use *real* books, not hallucinated ones
+  - Include a few categories: habits, coding (Python + web dev), history (20th century), productivity, business/leadership, and cooking
+  - You may make up affiliate links as placeholders but clearly mark them as `TODO_REPLACE_WITH_REAL_AFFILIATE`
+
+- `requirements.txt`  
+  - Minimal dependencies (Streamlit, pandas, python-dotenv if needed)
+
+- `README.md`  
+  - Clear explanation of:
+    - What Halchemy Library does
+    - How to run the Streamlit app
+    - How the recommendation logic works
+    - How to extend the book catalog
+    - Where affiliate links fit into the system
+
+- `docs/book_data.md`  
+  - A separate note that explains, in detail:
+    - How to pull candidate book data (e.g., from Amazon/Bookshop/Google Books or via Gemini CLI prompts)
+    - How to manually verify books (to avoid hallucinations and low-quality picks)
+    - How to define and maintain **metadata** for each book
+    - How this metadata feeds into the recommendation engine
+    - Suggested process to update `books.csv` over time while keeping quality high
+
+You may add more helper modules if you feel they improve code organization (e.g., `conversation.py` for chat state logic, `recommendation.py` for scoring).
+
+---
+
+## Book metadata model
+
+In `data/books.csv`, design a schema that supports smart sequencing and filtering. For example:
+
+- `id` (unique)
+- `title`
+- `author`
+- `category` (e.g., habits, coding, history, cooking, productivity, business)
+- `subcategory` (optional: e.g., “python”, “frontend”, “WWII”, “japanese-cooking”)
+- `difficulty` (1–5, where 1 = beginner-friendly, 5 = advanced)
+- `readability` (1–5, how easy it is to read/learn from; focus on avoiding 1–2 for beginners)
+- `style` (e.g., “story-driven”, “tactical/how-to”, “academic”, “reference”)
+- `learning_type` (e.g., “procedural-skill”, “narrative-history”, “conceptual”, “behavioral-skill”)
+- `chronology_hint` (for history: rough era or year range; can be numeric year or string like “Ancient”, “Pre-WWII”, “Cold War”)
+- `short_description` (2–3 sentence teaching-oriented description)
+- `store_url` (link to Amazon or similar)
+- `affiliate_url` (store_url with affiliate tag appended or a separate link; for now, use placeholder `https://example.com/your-affiliate-link?id=...`)
+- `is_beginner_friendly` (boolean)
+- `is_intermediate` (boolean)
+- `is_advanced` (boolean)
+
+You may adjust/extend these fields if helpful, but keep the CSV human-editable.
+
+---
+
+## Recommendation logic (very important)
+
+The core intelligence should be **rule-based + metadata-driven**, not generative. The model (you) will write deterministic Python rules.
+
+### 1. Conversation flow
+
+Implement a simple **chatbot-style flow** using Streamlit where:
+
+1. User enters an initial query, like:
+   - “I want to learn habits”
+   - “I want to learn Python as a beginner”
+   - “I want to understand World War II history”
+   - “I want to learn how to cook Japanese food”
+
+2. The system parses this high-level intent and maps it to:
+   - `category` (habits/coding/history/cooking/productivity/business)
+   - optional `subcategory` (python, web-dev, WWII, japanese-cooking, etc.)
+
+3. The chatbot then **asks 2–4 targeted clarifying questions**, such as:
+   - “Are you a beginner, intermediate, or advanced in this subject?”
+   - “Do you prefer light, story-driven books, or more structured, tactical guides?”
+   - “How much time per week can you realistically commit to reading?”
+   - “Would you like a shorter path (3 books) or a deeper one (5–7 books)?”
+
+Store these responses in `st.session_state`.
+
+4. Once enough info is collected, the user can click a button like “Generate my reading path” OR the bot can naturally progress there when ready.
+
+### 2. Sequencing rules
+
+Build a **deterministic sequencing engine** in Python that:
+
+- Filters candidate books from `books.csv` by:
+  - category
+  - optional subcategory
+  - difficulty relative to user’s level
+  - readability (favor highly readable books for beginners)
+  - learning_type rules:
+    - procedural skills → sort by difficulty ascending
+    - narrative/history → sort by `chronology_hint`
+    - behavioral skills (habits, leadership) → fundamentals → psychology → application
+
+- Picks 3–7 books based on the user’s:
+  - level (beginner: more beginner books, maybe 3–4 total)
+  - depth preference (short vs deep path)
+  - style preference (story-driven vs tactical)
+
+- Returns an **ordered list** that represents a learning journey, not just a pile.
+
+Do **not** use the LLM to choose specific books; all selection must be from the CSV with Python logic.
+
+### 3. “Hint:” for maximum skill adoption
+
+After presenting the recommended book sequence, generate a **domain-specific Hint section**.
+
+For example:
+- If category = habits → hint about implementing one micro-habit per week, tracking, and reflecting.
+- If category = coding → hint about doing small projects, coding along with examples, and using GitHub.
+- If category = history → hint about building a timeline, taking notes on cause-and-effect, and comparing perspectives.
+- If category = cooking → hint about cooking the same recipe multiple times, mastering fundamentals, and mise en place.
+
+This Hint can be generated by a small **rule-based helper** (e.g., a mapping dict from `category` to advice text), not necessarily by invoking an LLM at runtime.
+
+If you want, you can implement an optional hook where an environment variable like `USE_LLM_HINTS=true` will call a model to expand the hint, but the default should work purely offline with predefined advice.
+
+---
+
+## Streamlit UX requirements
+
+In `app.py`:
+
+- Use a clean, simple layout.
+- At the top, show app title and a brief description:
+  > “Halchemy Library — Tell us what you want to learn. We’ll build a reading path that’s actually readable, not overwhelming.”
+
+- Use `st.chat_message("user")` and `st.chat_message("assistant")` to represent the conversation.
+- Use `st.chat_input` for user messages.
+- Keep the conversation flow simple and deterministic.  
+  E.g., a small state machine using `st.session_state["stage"]`:
+  - "intro" → "ask_goal" → "ask_level" → "ask_style" → "ask_depth" → "recommendation"
+
+- When recommendations are ready:
+  - Render each book as a neat “card”-like block:
+    - title (bold)
+    - author
+    - short_description
+    - “Buy” button or link with affiliate URL
+  - Show them numbered to reinforce the path: “Step 1”, “Step 2”, etc.
+
+- Below the book cards, show a “Hint:” section in a visually distinct way.
+
+---
+
+## Handling hallucinations & safety
+
+- The recommendation engine must **never** create or recommend books that are not present in `books.csv`.
+- All book data must come from the CSV.
+- Any missing or invalid state should fail gracefully with a friendly message, like:
+  > “We don’t have enough curated books for that topic yet. Try a nearby topic like ‘habits’ or ‘Python’.”
+
+---
+
+## README contents (high level)
+
+In `README.md`, include:
+
+- Project description and motivation
+- Architectural overview (Streamlit app + CSV metadata + rule-based recommender)
+- Instructions:
+  - How to create and activate a virtual environment
+  - How to install dependencies (`pip install -r requirements.txt`)
+  - How to run the app (`streamlit run app.py`)
+- A section called “How Book Metadata Works” explaining:
+  - The CSV schema
+  - Why fields like difficulty, readability, learning_type matter
+  - How the sequencing engine uses them
+- A section called “Adding More Books” explaining:
+  - How to add books to `data/books.csv`
+  - How to update affiliate URLs
+  - Suggestions on how to vet books (readability, teaching quality)
+
+---
+
+## docs/book_data.md contents (high level)
+
+Create `docs/book_data.md` with a more detailed, operational doc that covers:
+
+1. **Book sourcing workflow**
+   - How a human curator can:
+     - Use Amazon, Bookshop, Google Books, Goodreads, or Gemini CLI to find candidate books
+     - Filter for quality, accessibility, and teaching clarity
+     - Avoid dense, overly academic or poorly structured books for beginners
+
+2. **Metadata creation**
+   - How to assign:
+     - category & subcategory
+     - difficulty & readability (with concrete heuristics)
+     - style & learning_type
+     - chronology_hint for history
+     - short_description (written in your own words to avoid copyright issues)
+   - Example rows for each category (habits, coding, history, etc.)
+
+3. **Affiliate links**
+   - Explanation of:
+     - How to join Amazon Associates or similar programs
+     - How to generate an affiliate URL from a product URL
+     - Where to store them in the CSV (`affiliate_url` column)
+   - Notes:
+     - For the MVP, placeholder affiliate links are acceptable with a TODO
+
+4. **How metadata flows into the system**
+   - Diagram or description of:
+     - User query → category mapping
+     - Metadata filtering and sorting
+     - Sequencing rules (procedural vs narrative vs behavioral fields)
+   - How changes in `books.csv` immediately affect recommendations (no code change required)
+
+5. **Using Gemini CLI to help book curation (optional section)**
+   - Example prompts someone can use with Gemini CLI to brainstorm *candidate* books
+   - Strong reminder: human must verify all books exist and are appropriate before adding to CSV
+   - Emphasis on avoiding fully automated ingestion to maintain quality and trust
+
+---
+
+## Implementation quality
+
+- Use clear, readable Python code with type hints where appropriate.
+- Add inline comments explaining the key decisions in the recommendation logic.
+- Make the code easy to extend for future categories, more complex logic, or integration with a real database.
+
+Now, please generate the full repository content (all files mentioned above) in a way that I can copy into a new GitHub repo called `halchemy-library-streamlit` and run immediately.
