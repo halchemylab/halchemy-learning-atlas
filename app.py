@@ -1,235 +1,156 @@
 import streamlit as st
 import pandas as pd
-import time
+import json
+import os
+from openai import OpenAI
 from src.books import load_books, filter_books, sequence_books, get_hint_for_category
+from src.llm_client import get_chat_completion
 
 # --- Page Config ---
 st.set_page_config(
-    page_title="Halchemy Library",
+    page_title="Halchemy Library (AI-Powered)",
     page_icon="📚",
     layout="centered"
 )
+
+# --- Setup & API Key ---
+st.title("Halchemy Library 📚")
+st.caption("Your AI Librarian for curated learning paths.")
+
+# Sidebar for API Key
+with st.sidebar:
+    st.header("Configuration")
+    
+    # Try to get key from environment or secrets first
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        api_key = st.text_input("Enter OpenAI API Key", type="password")
+        if not api_key:
+            st.warning("Please enter your OpenAI API Key to continue.")
+            st.stop()
+    else:
+        st.success("API Key loaded from environment.")
+
+# Initialize OpenAI Client
+client = OpenAI(api_key=api_key)
 
 # --- State Management ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "stage" not in st.session_state:
-    st.session_state.stage = "intro"  # stages: intro, ask_level, ask_style, ask_depth, recommendation
-
-if "user_inputs" not in st.session_state:
-    st.session_state.user_inputs = {
-        "category": None,
-        "subcategory": None,
-        "level": None,
-        "style": None,
-        "depth": None
-    }
-
 if "books_df" not in st.session_state:
     st.session_state.books_df = load_books()
 
 # --- Helper Functions ---
+def execute_recommendation(args):
+    """Executes the deterministic book logic based on LLM-extracted args."""
+    category = args.get("category")
+    subcategory = args.get("subcategory")
+    level = args.get("level", "beginner")
+    style = args.get("style")
+    depth = args.get("depth", "short")
 
-def add_message(role: str, content: str):
-    """Adds a message to the chat history."""
-    st.session_state.messages.append({"role": role, "content": content})
-
-def typing_effect(text: str):
-    """Simulates typing effect (optional, purely visual)."""
-    # In a real app, we might use a placeholder, but for simple Streamlit flow, 
-    # we just append the message.
-    pass
-
-def reset_conversation():
-    st.session_state.messages = []
-    st.session_state.stage = "intro"
-    st.session_state.user_inputs = {
-        "category": None,
-        "subcategory": None,
-        "level": None,
-        "style": None,
-        "depth": None
-    }
-    st.rerun()
-
-# --- parsing logic (simple keyword matching) ---
-def parse_category(user_text: str):
-    text = user_text.lower()
-    # Map keywords to categories
-    mapping = {
-        "habit": "habits",
-        "habits": "habits",
-        "python": ("coding", "python"),
-        "code": "coding",
-        "coding": "coding",
-        "web": ("coding", "web-dev"),
-        "html": ("coding", "web-dev"),
-        "css": ("coding", "web-dev"),
-        "history": "history",
-        "war": ("history", "WWII"),
-        "wwii": ("history", "WWII"),
-        "cook": "cooking",
-        "cooking": "cooking",
-        "food": "cooking",
-        "Japanese": ("cooking", "japanese-cooking"),
-        "productivity": "productivity",
-        "focus": "productivity",
-        "business": "business",
-        "manage": ("business", "management"),
-        "leader": ("business", "leadership"),
-        "startup": ("business", "startup")
-    }
+    filtered = filter_books(
+        st.session_state.books_df,
+        category=category,
+        subcategory=subcategory,
+        level=level,
+        style_pref=style
+    )
     
-    for key, value in mapping.items():
-        if key in text:
-            if isinstance(value, tuple):
-                return value[0], value[1]
-            return value, None
-    return None, None
+    path = sequence_books(filtered, depth=depth)
+    
+    return path, category, depth
 
-def parse_level(user_text: str):
-    text = user_text.lower()
-    if "begin" in text or "start" in text or "new" in text:
-        return "beginner"
-    if "intermed" in text:
-        return "intermediate"
-    if "advan" in text or "expert" in text or "deep" in text:
-        return "advanced"
-    return None
+def render_books(path, category):
+    """Renders the book cards and hint."""
+    if path.empty:
+        st.warning("I couldn't find enough books matching those exact criteria. Try a broader category.")
+        return
 
-def parse_style(user_text: str):
-    text = user_text.lower()
-    if "story" in text or "narrative" in text:
-        return "story-driven"
-    if "how-to" in text or "guide" in text or "tactic" in text or "practical" in text:
-        return "tactical/how-to"
-    return "any" # Default if unclear
+    st.markdown("### 🎯 Your Custom Reading Path")
+    
+    for i, (idx, book) in enumerate(path.iterrows(), 1):
+        with st.container(border=True):
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.markdown(f"**Step {i}: {book['title']}**")
+                st.markdown(f"*by {book['author']}*")
+                st.caption(book['short_description'])
+            with col2:
+                st.link_button("Buy Book", book['store_url'])
+    
+    # Hint Section
+    st.markdown("---")
+    st.info(f"💡 **Hint for learning {category.capitalize()}:**\n\n{get_hint_for_category(category)}")
 
-def parse_depth(user_text: str):
-    text = user_text.lower()
-    if "short" in text or "quick" in text or "3" in text:
-        return "short"
-    if "deep" in text or "long" in text or "5" in text or "7" in text:
-        return "deep"
-    return "short" # Default
 
-# --- Main App Layout ---
-
-st.title("Halchemy Library 📚")
-st.caption("Tell us what you want to learn. We’ll build a reading path that’s actually readable.")
+# --- Chat Interface ---
 
 # Display Chat History
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-
-# --- Conversation Logic ---
+    # We only display user and assistant text messages, not tool calls/results
+    if msg["role"] in ["user", "assistant"] and msg.get("content"):
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
 # Initial Greeting
 if not st.session_state.messages:
-    intro_msg = "Hi! I can help you master a new subject with a curated reading path. What do you want to learn today? (e.g., 'habits', 'Python', 'history', 'cooking')"
-    add_message("assistant", intro_msg)
+    intro_msg = "Hello! I'm your librarian. Tell me what you want to learn (e.g., 'Python', 'Habits', 'History'), and I'll design a reading path for you."
+    st.session_state.messages.append({"role": "assistant", "content": intro_msg})
     st.rerun()
 
-# User Input Handling
-if prompt := st.chat_input("Your answer..."):
-    # Display user message
-    add_message("user", prompt)
-    
-    # State Machine
-    stage = st.session_state.stage
-    
-    if stage == "intro":
-        cat, subcat = parse_category(prompt)
-        if cat:
-            st.session_state.user_inputs["category"] = cat
-            st.session_state.user_inputs["subcategory"] = subcat
+# Handle User Input
+if prompt := st.chat_input("What do you want to learn?"):
+    # 1. Add User Message
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # 2. Call LLM
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            try:
+                # Prepare messages for API (exclude tool_output artifacts if we were strictly adhering to history, 
+                # but for this simple loop, we send the full conversation state)
+                # We need to be careful about serializing the history correctly if we had previous tool calls.
+                # For MVP simplicity, we'll just send the text messages to keep context clear, 
+                # or we need to handle the full tool-call/tool-response lifecycle.
+                # Let's use a simplified history for the context window to avoid "invalid role" errors 
+                # if we don't strictly pair tool calls with tool outputs in the list.
+                
+                # Actually, let's just filter for text for the context to be safe, 
+                # unless we strictly manage the tool lifecycle.
+                
+                api_messages = [
+                    {"role": m["role"], "content": m["content"]} 
+                    for m in st.session_state.messages 
+                    if m.get("content") is not None
+                ]
+                
+                response_message = get_chat_completion(client, api_messages)
+
+                # 3. Handle Response
+                if response_message.tool_calls:
+                    # The LLM wants to run the search!
+                    tool_call = response_message.tool_calls[0]
+                    args = json.loads(tool_call.function.arguments)
+                    
+                    # Execute Logic
+                    path, category, depth = execute_recommendation(args)
+                    
+                    # Render results immediately
+                    render_books(path, category)
+                    
+                    # Save a summary message to history so context is preserved
+                    success_msg = f"I've generated a {depth} reading path for **{category}** ({args.get('level')})."
+                    st.session_state.messages.append({"role": "assistant", "content": success_msg})
+                    
+                else:
+                    # Normal text response
+                    content = response_message.content
+                    st.markdown(content)
+                    st.session_state.messages.append({"role": "assistant", "content": content})
             
-            # Move to next stage
-            st.session_state.stage = "ask_level"
-            response = f"Great, **{cat.capitalize()}** is a fantastic choice."
-            if subcat:
-                response += f" Specifically regarding **{subcat}**."
-            response += "\n\nAre you a **beginner**, **intermediate**, or **advanced** learner in this field?"
-            add_message("assistant", response)
-        else:
-            # Fallback
-            response = "I'm not sure I have books on that yet. Currently, I can help with **Habits, Coding (Python/Web), History (WWII), Cooking, Productivity, and Business**. Which of these interests you?"
-            add_message("assistant", response)
-
-    elif stage == "ask_level":
-        level = parse_level(prompt)
-        if level:
-            st.session_state.user_inputs["level"] = level
-            st.session_state.stage = "ask_style"
-            
-            response = f"Got it, looking for **{level}** resources.""\n\nDo you prefer books that are **story-driven** (narratives, biographies) or more **tactical/how-to** (guides, manuals)?"
-            add_message("assistant", response)
-        else:
-            add_message("assistant", "Could you clarify? Please type 'beginner', 'intermediate', or 'advanced'.")
-
-    elif stage == "ask_style":
-        style = parse_style(prompt)
-        st.session_state.user_inputs["style"] = style # even if "any"
-        
-        st.session_state.stage = "ask_depth"
-        response = "Understood.""\nLast question: Would you like a **short path** (3 essential books) or a **deep dive** (5-7 books)?"
-        add_message("assistant", response)
-
-    elif stage == "ask_depth":
-        depth = parse_depth(prompt)
-        st.session_state.user_inputs["depth"] = depth
-        
-        st.session_state.stage = "recommendation"
-        add_message("assistant", "Perfect. Generating your learning path now...")
-        st.rerun() # Force rerun to show recommendations immediately
-
-    elif stage == "recommendation":
-        add_message("assistant", "If you'd like to start over, just type 'reset' or refresh the page.")
-        if prompt.lower() == "reset":
-            reset_conversation()
-
-    st.rerun()
-
-# --- Recommendation Rendering ---
-if st.session_state.stage == "recommendation":
-    inputs = st.session_state.user_inputs
-    
-    # Get Logic results
-    filtered = filter_books(
-        st.session_state.books_df,
-        category=inputs["category"],
-        subcategory=inputs["subcategory"],
-        level=inputs["level"],
-        style_pref=inputs["style"] if inputs["style"] != "any" else None
-    )
-    
-    path = sequence_books(filtered, depth=inputs["depth"])
-    
-    # Render Results
-    if not path.empty:
-        st.markdown("### 🎯 Your Custom Reading Path")
-        
-        for i, (idx, book) in enumerate(path.iterrows(), 1):
-            with st.container(border=True):
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.markdown(f"**Step {i}: {book['title']}**")
-                    st.markdown(f"*by {book['author']}*")
-                    st.caption(book['short_description'])
-                with col2:
-                    st.link_button("Buy Book", book['store_url'])
-        
-        # Hint Section
-        st.markdown("---")
-        st.info(f"💡 **Hint for learning {inputs['category'].capitalize()}:**\n\n{get_hint_for_category(inputs['category'])}")
-        
-        # Add a button to reset at the bottom
-        if st.button("Start Over"):
-            reset_conversation()
-            
-    else:
-        st.warning("I couldn't find enough books matching your exact criteria. Try restarting and choosing a broader category or different level.")
-        if st.button("Try Again"):
-            reset_conversation()
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
