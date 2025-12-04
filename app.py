@@ -5,6 +5,7 @@ import os
 from openai import OpenAI
 from src.books import load_books, filter_books, sequence_books, get_hint_for_category
 from src.llm_client import get_chat_completion
+from src.roi import load_stats, increment_stats
 
 # --- Page Config ---
 st.set_page_config(
@@ -17,8 +18,22 @@ st.set_page_config(
 st.title("Halchemy Library 📚")
 st.caption("Your AI Librarian for curated learning paths.")
 
-# Sidebar for API Key
+# --- Sidebar: ROI & Config ---
 with st.sidebar:
+    # ROI Section
+    st.header("ROI Metrics")
+    stats = load_stats()
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Usage", f"{stats['usage_count']}x")
+    with col2:
+        st.metric("Time Saved", f"{stats['time_saved_mins']}m")
+    with col3:
+        st.metric("Money Saved", f"${stats['money_saved_usd']}")
+    
+    st.divider()
+
+    # Configuration Section
     st.header("Configuration")
     
     # Try to get key from environment or secrets first
@@ -30,6 +45,31 @@ with st.sidebar:
             st.stop()
     else:
         st.success("API Key loaded from environment.")
+
+    # Model and Temperature selectors
+    # Ensure default model is set in session state if not already present
+    if "model" not in st.session_state:
+        st.session_state.model = "gpt-4o-mini"
+    
+    st.session_state.model = st.selectbox(
+        "Select LLM Model",
+        ["gpt-4o-mini", "gpt-4", "gpt-3.5-turbo"],
+        index=["gpt-4o-mini", "gpt-4", "gpt-3.5-turbo"].index(st.session_state.model),
+        key="model_selector"
+    )
+
+    # Ensure default temperature is set in session state if not already present
+    if "temperature" not in st.session_state:
+        st.session_state.temperature = 0.7
+        
+    st.session_state.temperature = st.slider(
+        "Temperature (creativity)",
+        min_value=0.0,
+        max_value=1.5,
+        value=st.session_state.temperature,
+        step=0.1,
+        key="temperature_slider"
+    )
 
 # Initialize OpenAI Client
 client = OpenAI(api_key=api_key)
@@ -59,6 +99,9 @@ def execute_recommendation(args):
     )
     
     path = sequence_books(filtered, depth=depth)
+    
+    # Increment ROI stats only if we actually ran a search
+    increment_stats()
     
     return path, category, depth
 
@@ -128,7 +171,7 @@ if prompt := st.chat_input("What do you want to learn?"):
                     if m.get("content") is not None
                 ]
                 
-                response_message = get_chat_completion(client, api_messages)
+                response_message = get_chat_completion(client, api_messages, model=st.session_state.model, temperature=st.session_state.temperature)
 
                 # 3. Handle Response
                 if response_message.tool_calls:

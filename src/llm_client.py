@@ -62,7 +62,9 @@ To use it, you must first understand the user's:
 
 def get_chat_completion(
     client: OpenAI,
-    messages: List[Dict[str, Any]]
+    messages: List[Dict[str, Any]],
+    model: str = "gpt-4o-mini",
+    temperature: float = 0.7
 ) -> Any:
     """
     Sends the chat history to OpenAI and returns the response.
@@ -72,10 +74,11 @@ def get_chat_completion(
     full_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",  # Using a cost-effective model
+        model=model,
         messages=full_messages,
         tools=TOOLS,
-        tool_choice="auto"
+        tool_choice="auto",
+        temperature=temperature
     )
     
     return response.choices[0].message
