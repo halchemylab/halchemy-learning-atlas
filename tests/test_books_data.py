@@ -11,7 +11,7 @@ class TestBooksData(unittest.TestCase):
             reader = csv.DictReader(f)
             books = list(reader)
             
-            self.assertEqual(len(books), 120, "Should have 120 books")
+            self.assertEqual(len(books), 151, "Should have 151 books")
             
             ids = set()
             for book in books:
