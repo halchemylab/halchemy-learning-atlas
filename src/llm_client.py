@@ -93,3 +93,38 @@ def get_chat_completion(
     )
     
     return response.choices[0].message
+
+def get_sequence_rationale(
+    client: OpenAI,
+    user_query: str,
+    books: List[Dict[str, Any]],
+    model: str = "gpt-4o-mini"
+) -> str:
+    """
+    Generates a short explanation for why this specific sequence of books was chosen.
+    """
+    book_titles = [f"{i+1}. {b['title']} by {b['author']}" for i, b in enumerate(books)]
+    book_list_str = "\n".join(book_titles)
+    
+    prompt = f"""
+    The user asked: "{user_query}"
+    
+    We have curated the following reading path:
+    {book_list_str}
+    
+    Explain in 1-2 sentences why this specific sequence fits their goal. 
+    Focus on the progression (e.g., "starts with X, moves to Y").
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful librarian explaining a reading list."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return "Enjoy your reading path!"

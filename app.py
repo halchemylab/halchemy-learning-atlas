@@ -4,7 +4,7 @@ import json
 import os
 from openai import OpenAI
 from src.books import load_books, filter_books, sequence_books, get_hint_for_category
-from src.llm_client import get_chat_completion
+from src.llm_client import get_chat_completion, get_sequence_rationale
 from src.roi import load_stats, increment_stats
 
 # --- Page Config ---
@@ -184,6 +184,17 @@ if prompt := st.chat_input("What do you want to learn?"):
                     
                     # Render results immediately
                     render_books(path, category)
+                    
+                    # Generate Rationale
+                    if not path.empty:
+                        with st.spinner("Analyzing your path..."):
+                            rationale = get_sequence_rationale(
+                                client, 
+                                prompt, 
+                                path.to_dict('records'), 
+                                model=st.session_state.model
+                            )
+                            st.info(f"🤔 **Why this path?**\n\n{rationale}")
                     
                     # Save a summary message to history so context is preserved
                     success_msg = f"I've generated a {depth} reading path for **{category}** ({args.get('level')})."
