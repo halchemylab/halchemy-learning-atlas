@@ -6,18 +6,48 @@ from typing import List, Dict, Optional
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 BOOKS_FILE = os.path.join(DATA_DIR, 'books.csv')
 
+def validate_books(df: pd.DataFrame) -> None:
+    """Validates the books DataFrame schema and content."""
+    required_cols = [
+        'id', 'title', 'author', 'category', 'subcategory', 
+        'difficulty', 'readability', 'style', 'learning_type',
+        'is_beginner_friendly', 'is_intermediate', 'is_advanced'
+    ]
+    
+    # Check missing columns
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        raise ValueError(f"Dataset missing required columns: {missing}")
+
+    # Check numeric ranges
+    if not df['difficulty'].between(1, 5).all():
+        raise ValueError("Column 'difficulty' contains values outside 1-5 range")
+        
+    if not df['readability'].between(1, 5).all():
+        raise ValueError("Column 'readability' contains values outside 1-5 range")
+
+    # Check unique IDs
+    if not df['id'].is_unique:
+        raise ValueError("Duplicate book IDs found")
+
 def load_books() -> pd.DataFrame:
-    """Loads the books dataset from the CSV file."""
+    """Loads and validates the books dataset from the CSV file."""
     try:
+        if not os.path.exists(BOOKS_FILE):
+             return pd.DataFrame()
+             
         df = pd.read_csv(BOOKS_FILE)
+        
         # Ensure boolean columns are actually booleans
         bool_cols = ['is_beginner_friendly', 'is_intermediate', 'is_advanced']
         for col in bool_cols:
             if col in df.columns:
                  df[col] = df[col].astype(bool)
+        
+        validate_books(df)
         return df
-    except FileNotFoundError:
-        # In production, you might log this error
+    except (FileNotFoundError, ValueError) as e:
+        print(f"Error loading books: {e}")
         return pd.DataFrame()
 
 def filter_books(
