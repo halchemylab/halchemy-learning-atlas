@@ -2,6 +2,17 @@ import os
 from openai import OpenAI
 from typing import List, Dict, Any
 
+from src.books import load_books, get_unique_values
+
+# Load data dynamically to constrain the LLM
+_df = load_books()
+_valid_categories = get_unique_values(_df, 'category')
+# Fallback if data is missing (prevents crash on empty DB)
+if not _valid_categories:
+    _valid_categories = ["habits", "coding", "history", "cooking", "productivity", "business"]
+
+_categories_str = ", ".join([c.title() for c in _valid_categories])
+
 # Define the tool structure for OpenAI function calling
 TOOLS = [
     {
@@ -14,7 +25,7 @@ TOOLS = [
                 "properties": {
                     "category": {
                         "type": "string",
-                        "enum": ["habits", "coding", "history", "cooking", "productivity", "business"],
+                        "enum": _valid_categories,
                         "description": "The main topic category."
                     },
                     "subcategory": {
@@ -43,11 +54,11 @@ TOOLS = [
     }
 ]
 
-SYSTEM_PROMPT = """You are the Halchemy Library Librarian. Your goal is to help users learn new skills by recommending a "book path" (a sequence of books).
+SYSTEM_PROMPT = f"""You are the Halchemy Library Librarian. Your goal is to help users learn new skills by recommending a "book path" (a sequence of books).
 
 You have access to a tool called `query_library`.
 To use it, you must first understand the user's:
-1. **Topic** (Must map to: Habits, Coding, History, Cooking, Productivity, Business).
+1. **Topic** (Must map to: {_categories_str}).
 2. **Current Level** (Beginner, Intermediate, Advanced).
 3. **Style Preference** (Story-driven/Narrative vs. Tactical/How-to).
 4. **Depth** (Short path vs. Deep dive).

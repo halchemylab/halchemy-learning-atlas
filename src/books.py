@@ -122,6 +122,12 @@ def sequence_books(
     limit = 3 if depth == "short" else 7
     return candidates.head(limit)
 
+def get_unique_values(df: pd.DataFrame, column: str) -> List[str]:
+    """Returns sorted unique values for a column, excluding nulls."""
+    if df.empty or column not in df.columns:
+        return []
+    return sorted(df[column].dropna().unique().tolist())
+
 def get_hint_for_category(category: str) -> str:
     """Returns domain-specific advice for the result page."""
     hints = {
