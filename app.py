@@ -81,6 +81,9 @@ if "messages" not in st.session_state:
 if "books_df" not in st.session_state:
     st.session_state.books_df = load_books()
 
+if "current_path_data" not in st.session_state:
+    st.session_state.current_path_data = None
+
 # --- Helper Functions ---
 def execute_recommendation(args):
     """Executes the deterministic book logic based on LLM-extracted args."""
@@ -103,7 +106,7 @@ def execute_recommendation(args):
     # Increment ROI stats only if we actually ran a search
     increment_stats()
     
-    return path, category, depth
+    return path, category, depth, level
 
 def render_books(path, category):
     """Renders the book cards and hint."""
@@ -125,7 +128,9 @@ def render_books(path, category):
     
     # Hint Section
     st.markdown("---")
-    st.info(f"💡 **Hint for learning {category.capitalize()}:**\n\n{get_hint_for_category(category)}")
+    hint_text = get_hint_for_category(category)
+    st.info(f"💡 **Hint for learning {category.capitalize()}:**\n\n{hint_text}")
+    return hint_text
 
 
 # --- Chat Interface ---
@@ -136,6 +141,32 @@ for msg in st.session_state.messages:
     if msg["role"] in ["user", "assistant"] and msg.get("content"):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+
+# Export Button (Sidebar)
+if st.session_state.current_path_data:
+    st.sidebar.divider()
+    st.sidebar.header("📥 Export")
+    
+    data = st.session_state.current_path_data
+    markdown_content = f"# Learning Path: {data['category'].title()} ({data['level'].title()})\n\n"
+    markdown_content += f"**Rationale:** {data['rationale']}\n\n"
+    markdown_content += "## The Books\n\n"
+    
+    for i, book in enumerate(data['books'], 1):
+        markdown_content += f"### {i}. {book['title']}\n"
+        markdown_content += f"*Author: {book['author']}*\n\n"
+        markdown_content += f"{book['short_description']}\n\n"
+        markdown_content += f"[Buy Link]({book['store_url']})\n\n"
+    
+    markdown_content += "---\n\n"
+    markdown_content += f"## Expert Hint\n{data['hint']}"
+    
+    st.sidebar.download_button(
+        label="Download Curriculum (.md)",
+        data=markdown_content,
+        file_name=f"halchemy_path_{data['category']}.md",
+        mime="text/markdown"
+    )
 
 # Initial Greeting
 if not st.session_state.messages:
@@ -180,21 +211,31 @@ if prompt := st.chat_input("What do you want to learn?"):
                     args = json.loads(tool_call.function.arguments)
                     
                     # Execute Logic
-                    path, category, depth = execute_recommendation(args)
+                    path, category, depth, level = execute_recommendation(args)
                     
                     # Render results immediately
-                    render_books(path, category)
+                    hint_text = render_books(path, category)
                     
                     # Generate Rationale
+                    rationale_text = ""
                     if not path.empty:
                         with st.spinner("Analyzing your path..."):
-                            rationale = get_sequence_rationale(
+                            rationale_text = get_sequence_rationale(
                                 client, 
                                 prompt, 
                                 path.to_dict('records'), 
                                 model=st.session_state.model
                             )
-                            st.info(f"🤔 **Why this path?**\n\n{rationale}")
+                            st.info(f"🤔 **Why this path?**\n\n{rationale_text}")
+
+                        # Save to session state for export
+                        st.session_state.current_path_data = {
+                            "category": category,
+                            "level": level,
+                            "books": path.to_dict('records'),
+                            "rationale": rationale_text,
+                            "hint": hint_text
+                        }
                     
                     # Save a summary message to history so context is preserved
                     success_msg = f"I've generated a {depth} reading path for **{category}** ({args.get('level')})."
