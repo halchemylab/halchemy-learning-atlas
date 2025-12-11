@@ -122,6 +122,12 @@ def render_books(path, category):
             with col1:
                 st.markdown(f"**Step {i}: {book['title']}**")
                 st.markdown(f"*by {book['author']}*")
+                
+                # Metadata Visuals
+                diff = int(book.get('difficulty', 1))
+                read = int(book.get('readability', 1))
+                st.caption(f"Difficulty: {'🌶️' * diff} | Readability: {'📖' * read}")
+                
                 st.caption(book['short_description'])
             with col2:
                 st.link_button("Buy Book", book['store_url'])
