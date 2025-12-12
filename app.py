@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import graphviz
 from openai import OpenAI
 from src.books import load_books, filter_books, sequence_books, get_hint_for_category, DataLoadingError
 from src.llm_client import get_chat_completion, get_sequence_rationale
@@ -113,6 +114,36 @@ def execute_recommendation(args):
     
     return path, category, depth, level
 
+def render_roadmap(path):
+    """Generates a Graphviz visualization of the learning path."""
+    if path.empty:
+        return None
+
+    graph = graphviz.Digraph()
+    graph.attr(rankdir='LR') # Left to Right layout
+    
+    # Define node styles
+    graph.attr('node', shape='box', style='filled', fillcolor='lightblue', fontname='Arial')
+    
+    previous_node_id = None
+    
+    for i, (idx, book) in enumerate(path.iterrows(), 1):
+        # Create a unique ID for the node
+        node_id = f"book_{i}"
+        
+        # Label with wrapping for better readability
+        label = f"Step {i}\n{book['title']}\n({book['author']})"
+        
+        graph.node(node_id, label)
+        
+        # Connect to previous node
+        if previous_node_id:
+            graph.edge(previous_node_id, node_id)
+            
+        previous_node_id = node_id
+        
+    return graph
+
 def render_books(path, category):
     """Renders the book cards and hint."""
     if path.empty:
@@ -120,6 +151,12 @@ def render_books(path, category):
         return
 
     st.markdown("### 🎯 Your Custom Reading Path")
+    
+    # 1. Render Visual Roadmap
+    roadmap = render_roadmap(path)
+    if roadmap:
+        with st.expander("🗺️ View Learning Map", expanded=True):
+            st.graphviz_chart(roadmap)
     
     for i, (idx, book) in enumerate(path.iterrows(), 1):
         with st.container(border=True):
