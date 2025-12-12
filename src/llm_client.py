@@ -5,8 +5,13 @@ from typing import List, Dict, Any
 from src.books import load_books, get_unique_values
 
 # Load data dynamically to constrain the LLM
-_df = load_books()
-_valid_categories = get_unique_values(_df, 'category')
+try:
+    _df = load_books()
+    _valid_categories = get_unique_values(_df, 'category')
+except Exception:
+    _df = None
+    _valid_categories = []
+
 # Fallback if data is missing (prevents crash on empty DB)
 if not _valid_categories:
     _valid_categories = ["habits", "coding", "history", "cooking", "productivity", "business"]

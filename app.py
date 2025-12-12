@@ -3,7 +3,7 @@ import pandas as pd
 import json
 import os
 from openai import OpenAI
-from src.books import load_books, filter_books, sequence_books, get_hint_for_category
+from src.books import load_books, filter_books, sequence_books, get_hint_for_category, DataLoadingError
 from src.llm_client import get_chat_completion, get_sequence_rationale
 from src.roi import load_stats, increment_stats
 
@@ -78,8 +78,13 @@ client = OpenAI(api_key=api_key)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "books_df" not in st.session_state:
-    st.session_state.books_df = load_books()
+try:
+    if "books_df" not in st.session_state:
+        st.session_state.books_df = load_books()
+except DataLoadingError as e:
+    st.error(f"🚨 System Error: {e}")
+    st.info("Please ensure 'data/books.csv' exists and is correctly formatted.")
+    st.stop()
 
 if "current_path_data" not in st.session_state:
     st.session_state.current_path_data = None

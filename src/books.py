@@ -6,6 +6,10 @@ from typing import List, Dict, Optional
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 BOOKS_FILE = os.path.join(DATA_DIR, 'books.csv')
 
+class DataLoadingError(Exception):
+    """Exception raised for errors in loading the books dataset."""
+    pass
+
 def validate_books(df: pd.DataFrame) -> None:
     """Validates the books DataFrame schema and content."""
     required_cols = [
@@ -32,10 +36,10 @@ def validate_books(df: pd.DataFrame) -> None:
 
 def load_books() -> pd.DataFrame:
     """Loads and validates the books dataset from the CSV file."""
+    if not os.path.exists(BOOKS_FILE):
+        raise DataLoadingError(f"Books data file not found at: {BOOKS_FILE}")
+
     try:
-        if not os.path.exists(BOOKS_FILE):
-             return pd.DataFrame()
-             
         df = pd.read_csv(BOOKS_FILE)
         
         # Ensure boolean columns are actually booleans
@@ -46,9 +50,8 @@ def load_books() -> pd.DataFrame:
         
         validate_books(df)
         return df
-    except (FileNotFoundError, ValueError) as e:
-        print(f"Error loading books: {e}")
-        return pd.DataFrame()
+    except Exception as e:
+        raise DataLoadingError(f"Failed to load books library: {e}")
 
 def filter_books(
     df: pd.DataFrame,
