@@ -7,6 +7,7 @@ from openai import OpenAI
 from src.books import load_books, filter_books, sequence_books, get_hint_for_category, DataLoadingError
 from src.llm_client import get_chat_completion, get_sequence_rationale
 from src.roi import load_stats, increment_stats
+from src.utils import fetch_book_cover
 
 # --- Page Config ---
 st.set_page_config(
@@ -160,7 +161,15 @@ def render_books(path, category):
     
     for i, (idx, book) in enumerate(path.iterrows(), 1):
         with st.container(border=True):
-            col1, col2 = st.columns([3, 1])
+            col0, col1, col2 = st.columns([1, 3, 1])
+            
+            with col0:
+                cover_url = fetch_book_cover(book['title'], book['author'])
+                if cover_url:
+                    st.image(cover_url, use_container_width=True)
+                else:
+                    st.markdown("📚") # Placeholder icon
+
             with col1:
                 st.markdown(f"**Step {i}: {book['title']}**")
                 st.markdown(f"*by {book['author']}*")
