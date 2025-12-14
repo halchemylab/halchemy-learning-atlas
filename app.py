@@ -8,6 +8,7 @@ from src.books import load_books, filter_books, sequence_books, get_hint_for_cat
 from src.llm_client import get_chat_completion, get_sequence_rationale
 from src.roi import load_stats, increment_stats
 from src.utils import fetch_book_cover
+from src.pdf_gen import generate_pdf
 
 # --- Page Config ---
 st.set_page_config(
@@ -223,6 +224,15 @@ if st.session_state.current_path_data:
         data=markdown_content,
         file_name=f"halchemy_path_{data['category']}.md",
         mime="text/markdown"
+    )
+
+    # Generate PDF on demand
+    pdf_bytes = generate_pdf(data)
+    st.sidebar.download_button(
+        label="Download Curriculum (.pdf)",
+        data=pdf_bytes,
+        file_name=f"halchemy_path_{data['category']}.pdf",
+        mime="application/pdf"
     )
 
 # Initial Greeting
