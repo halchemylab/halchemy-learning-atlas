@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+
+# IDEs
+.idea/
+.vscode/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+.DS_Store
+
+# Virtual environments
+venv/
+env/
+
+# Streamlit
+.streamlit/
+
+# My specific caches
+.pytest_cache/
