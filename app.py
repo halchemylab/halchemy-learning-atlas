@@ -24,19 +24,19 @@ st.caption("Your AI Librarian for curated learning paths.")
 # --- Sidebar: ROI & Config ---
 with st.sidebar:
     # Library Stats Section
-    st.header("Library Stats")
+    st.header("📊 Library Stats")
     stats = load_stats()
     
     with st.container(border=True):
-        st.metric("Paths", f"{stats.get('paths_generated', 0)}")
+        st.metric("Paths", f"{stats.get('paths_generated', 0)} linked")
     
     with st.container(border=True):
-        st.metric("Books", f"{stats.get('books_recommended', 0)}")
+        st.metric("Books", f"{stats.get('books_recommended', 0)} recommended")
     
     st.divider()
 
     # Configuration Section
-    st.header("Configuration")
+    st.header("⚙️ Configuration")
     
     # Try to get key from environment or secrets first
     api_key = os.environ.get("OPENAI_API_KEY")
