@@ -5,34 +5,44 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 STATS_FILE = os.path.join(DATA_DIR, 'roi_stats.json')
 
 DEFAULT_STATS = {
-    "usage_count": 0,
-    "time_saved_mins": 0,
-    "money_saved_usd": 0
+    "paths_generated": 0,
+    "books_recommended": 0,
+    "topics_explored": []
 }
 
 def load_stats():
-    """Loads ROI stats from the JSON file."""
+    """Loads Library stats from the JSON file."""
     if not os.path.exists(STATS_FILE):
         return DEFAULT_STATS.copy()
     
     try:
         with open(STATS_FILE, 'r') as f:
-            return json.load(f)
+            data = json.load(f)
+            # Basic schema check/migration - if old schema or missing keys, reset or adapt
+            if "paths_generated" not in data:
+                 return DEFAULT_STATS.copy()
+            return data
     except (json.JSONDecodeError, IOError):
         return DEFAULT_STATS.copy()
 
-def increment_stats(time_saved=15, money_saved=10):
-    """Increments usage and savings stats, then saves to file."""
+def increment_stats(num_books=0, category=None):
+    """Increments library stats and saves to file."""
     stats = load_stats()
     
-    stats["usage_count"] += 1
-    stats["time_saved_mins"] += time_saved
-    stats["money_saved_usd"] += money_saved
+    stats["paths_generated"] += 1
+    stats["books_recommended"] += num_books
+    
+    if category:
+        # Normalize category to lowercase for consistency
+        cat_lower = category.lower()
+        if cat_lower not in stats["topics_explored"]:
+            stats["topics_explored"].append(cat_lower)
     
     try:
         with open(STATS_FILE, 'w') as f:
             json.dump(stats, f, indent=4)
     except IOError:
-        pass # Fail silently in production if we can't write
+        pass 
         
     return stats
+

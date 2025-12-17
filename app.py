@@ -23,16 +23,16 @@ st.caption("Your AI Librarian for curated learning paths.")
 
 # --- Sidebar: ROI & Config ---
 with st.sidebar:
-    # ROI Section
-    st.header("ROI Metrics")
+    # Library Stats Section
+    st.header("Library Stats")
     stats = load_stats()
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Usage", f"{stats['usage_count']}x")
+        st.metric("Paths", f"{stats.get('paths_generated', 0)}")
     with col2:
-        st.metric("Time Saved", f"{stats['time_saved_mins']}m")
+        st.metric("Books", f"{stats.get('books_recommended', 0)}")
     with col3:
-        st.metric("Money Saved", f"${stats['money_saved_usd']}")
+        st.metric("Topics", f"{len(stats.get('topics_explored', []))}")
     
     st.divider()
 
@@ -111,8 +111,8 @@ def execute_recommendation(args):
     
     path = sequence_books(filtered, depth=depth)
     
-    # Increment ROI stats only if we actually ran a search
-    increment_stats()
+    # Increment stats only if we actually ran a search
+    increment_stats(num_books=len(path), category=category)
     
     return path, category, depth, level
 
