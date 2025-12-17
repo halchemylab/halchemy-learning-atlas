@@ -19,7 +19,8 @@ venv/
 env/
 
 # Streamlit
-.streamlit/
+.streamlit/*
+!.streamlit/config.toml
 
 # My specific caches
 .pytest_cache/
