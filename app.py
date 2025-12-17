@@ -26,13 +26,12 @@ with st.sidebar:
     # Library Stats Section
     st.header("Library Stats")
     stats = load_stats()
-    col1, col2, col3 = st.columns(3)
-    with col1:
+    
+    with st.container(border=True):
         st.metric("Paths", f"{stats.get('paths_generated', 0)}")
-    with col2:
+    
+    with st.container(border=True):
         st.metric("Books", f"{stats.get('books_recommended', 0)}")
-    with col3:
-        st.metric("Topics", f"{len(stats.get('topics_explored', []))}")
     
     st.divider()
 

@@ -6,8 +6,7 @@ STATS_FILE = os.path.join(DATA_DIR, 'roi_stats.json')
 
 DEFAULT_STATS = {
     "paths_generated": 0,
-    "books_recommended": 0,
-    "topics_explored": []
+    "books_recommended": 0
 }
 
 def load_stats():
@@ -18,9 +17,12 @@ def load_stats():
     try:
         with open(STATS_FILE, 'r') as f:
             data = json.load(f)
-            # Basic schema check/migration - if old schema or missing keys, reset or adapt
+            # Basic schema check/migration
             if "paths_generated" not in data:
                  return DEFAULT_STATS.copy()
+            # Remove 'topics_explored' if it exists from previous runs
+            if "topics_explored" in data:
+                del data["topics_explored"]
             return data
     except (json.JSONDecodeError, IOError):
         return DEFAULT_STATS.copy()
@@ -32,11 +34,7 @@ def increment_stats(num_books=0, category=None):
     stats["paths_generated"] += 1
     stats["books_recommended"] += num_books
     
-    if category:
-        # Normalize category to lowercase for consistency
-        cat_lower = category.lower()
-        if cat_lower not in stats["topics_explored"]:
-            stats["topics_explored"].append(cat_lower)
+    # 'topics_explored' logic removed
     
     try:
         with open(STATS_FILE, 'w') as f:
