@@ -30,13 +30,22 @@ st.caption("Your AI Librarian for curated learning paths.")
 with st.sidebar:
     # Library Stats Section
     st.header("📊 Library Stats")
-    stats = load_stats()
+    
+    # Create placeholders for dynamic updates
+    with st.container(border=True):
+        paths_placeholder = st.empty()
     
     with st.container(border=True):
-        st.metric("Paths", f"{stats.get('paths_generated', 0)} linked")
-    
-    with st.container(border=True):
-        st.metric("Books", f"{stats.get('books_recommended', 0)} recommended")
+        books_placeholder = st.empty()
+        
+    def update_stats_display():
+        """Reloads stats and updates the sidebar placeholders."""
+        current_stats = load_stats()
+        paths_placeholder.metric("Paths", f"{current_stats.get('paths_generated', 0)} linked")
+        books_placeholder.metric("Books", f"{current_stats.get('books_recommended', 0)} recommended")
+
+    # Initial render
+    update_stats_display()
     
     st.divider()
 
@@ -283,6 +292,9 @@ if prompt := st.chat_input("What do you want to learn?"):
                     
                     # Execute Logic
                     path, category, depth, level = execute_recommendation(args)
+                    
+                    # Update sidebar stats immediately
+                    update_stats_display()
                     
                     # Render results immediately
                     hint_text = render_books(path, category)
