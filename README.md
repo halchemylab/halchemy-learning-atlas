@@ -4,6 +4,8 @@
 
 It combines a **curated dataset** (to prevent AI hallucinations) with a **deterministic sequencing engine** and **LLM intelligence** (GPT-4) to provide personalized, logical learning journeys.
 
+![Halchemy Library Screenshot](assets/halchemy_library_screenshot.png)
+
 ## ✨ Key Features
 
 - **AI Librarian (Chat-to-Query):** Interactive chat interface that translates your learning goals into structured queries.
