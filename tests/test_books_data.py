@@ -8,7 +8,8 @@ class TestBooksData(unittest.TestCase):
         self.csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'books.csv')
         self.valid_categories = {
             "habits", "coding", "history", "cooking", "productivity", "business", 
-            "science", "philosophy", "design", "psychology", "health", "biography", "social"
+            "science", "philosophy", "design", "psychology", "health", "biography", "social",
+            "communication", "creativity", "data", "finance"
         }
         self.valid_learning_types = {"procedural-skill", "narrative-history", "behavioral-skill", "conceptual", "reference"}
 
