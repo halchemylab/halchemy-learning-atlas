@@ -9,7 +9,7 @@ class TestBooksData(unittest.TestCase):
         self.valid_categories = {
             "habits", "coding", "history", "cooking", "productivity", "business", 
             "science", "philosophy", "design", "psychology", "health", "biography", "social",
-            "communication", "creativity", "data", "finance"
+            "communication", "creativity", "data", "finance", "art"
         }
         self.valid_learning_types = {"procedural-skill", "narrative-history", "behavioral-skill", "conceptual", "reference"}
 
