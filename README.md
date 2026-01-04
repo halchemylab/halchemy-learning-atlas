@@ -14,6 +14,7 @@ It combines a **curated dataset** (to prevent AI hallucinations) with a **determ
 - **Expert Rationales:** AI-generated explanations of *why* each book was chosen for your specific path.
 - **Multiple Exports:** Download your curated curriculum as a clean Markdown file or a professional PDF.
 - **Library Stats:** Track your learning ROI with metrics on generated paths and recommended books.
+- **Affiliate Links:** Integrated links for direct purchasing of curated books.
 
 ## 🚀 Getting Started
 
