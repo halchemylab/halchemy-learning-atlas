@@ -11,6 +11,7 @@ import graphviz
 from openai import OpenAI
 from src.books import load_books, filter_books, sequence_books, get_hint_for_category, DataLoadingError
 from src.llm_client import get_chat_completion, get_sequence_rationale
+from src.path_editor import get_replacement_candidates, move_book, remove_book, replace_book
 from src.roi import load_stats, increment_stats
 from src.utils import fetch_book_cover
 from src.pdf_gen import generate_pdf
@@ -106,6 +107,15 @@ if "current_path_data" not in st.session_state:
     st.session_state.current_path_data = None
 
 # --- Helper Functions ---
+def books_to_dataframe(books):
+    """Converts stored book records back into a DataFrame for rendering."""
+    return pd.DataFrame(books)
+
+def update_current_path_books(books):
+    """Persists edited books and marks the AI rationale as stale."""
+    st.session_state.current_path_data["books"] = books
+    st.session_state.current_path_data["rationale_stale"] = True
+
 def execute_recommendation(args):
     """Executes the deterministic book logic based on LLM-extracted args."""
     category = args.get("category")
@@ -203,6 +213,77 @@ def render_books(path, category):
     st.info(f"💡 **Hint for learning {category.capitalize()}:**\n\n{hint_text}")
     return hint_text
 
+def render_path_editor(data):
+    """Renders manual controls for editing the current reading path."""
+    books = data["books"]
+    st.markdown("### Edit Path")
+
+    if len(books) < 3:
+        st.warning("Reading paths work best with at least 3 books.")
+
+    with st.expander("Reorder, remove, or replace books", expanded=False):
+        for index, book in enumerate(books):
+            cols = st.columns([5, 1, 1, 1])
+            with cols[0]:
+                st.markdown(f"**{index + 1}. {book['title']}**")
+                st.caption(f"by {book['author']}")
+            with cols[1]:
+                if st.button("Up", key=f"move_up_{index}_{book['id']}", disabled=index == 0):
+                    update_current_path_books(move_book(books, index, -1))
+                    st.rerun()
+            with cols[2]:
+                if st.button("Down", key=f"move_down_{index}_{book['id']}", disabled=index == len(books) - 1):
+                    update_current_path_books(move_book(books, index, 1))
+                    st.rerun()
+            with cols[3]:
+                if st.button("Remove", key=f"remove_{index}_{book['id']}"):
+                    update_current_path_books(remove_book(books, index))
+                    st.rerun()
+
+            candidates = get_replacement_candidates(
+                st.session_state.books_df,
+                books,
+                category=data["category"],
+                subcategory=data.get("subcategory"),
+                level=data.get("level", "beginner"),
+                style=data.get("style"),
+            )
+
+            if candidates:
+                selected_label = st.selectbox(
+                    "Replacement",
+                    options=list(range(len(candidates))),
+                    format_func=lambda candidate_index: (
+                        f"{candidates[candidate_index]['title']} by {candidates[candidate_index]['author']} "
+                        f"| Difficulty {candidates[candidate_index]['difficulty']} "
+                        f"| Readability {candidates[candidate_index]['readability']}"
+                    ),
+                    key=f"replacement_{index}_{book['id']}",
+                    label_visibility="collapsed",
+                )
+                if st.button("Replace this step", key=f"replace_{index}_{book['id']}"):
+                    replacement = candidates[selected_label]
+                    update_current_path_books(replace_book(books, index, replacement))
+                    st.rerun()
+            else:
+                st.caption("No replacement candidates available for this step.")
+
+            st.divider()
+
+    if data.get("rationale_stale"):
+        st.warning("The rationale was generated before your edits.")
+        if st.button("Refresh rationale"):
+            with st.spinner("Refreshing rationale..."):
+                data["rationale"] = get_sequence_rationale(
+                    client,
+                    data.get("user_query", "this learning goal"),
+                    data["books"],
+                    model=st.session_state.model,
+                )
+                data["rationale_stale"] = False
+                st.session_state.current_path_data = data
+                st.rerun()
+
 
 # --- Chat Interface ---
 
@@ -254,6 +335,15 @@ if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": intro_msg})
     st.rerun()
 
+# Current editable path
+if st.session_state.current_path_data:
+    current_data = st.session_state.current_path_data
+    current_path = books_to_dataframe(current_data["books"])
+    render_books(current_path, current_data["category"])
+    if current_data.get("rationale"):
+        st.info(f"🤔 **Why this path?**\n\n{current_data['rationale']}")
+    render_path_editor(current_data)
+
 # Handle User Input
 if prompt := st.chat_input("What do you want to learn?"):
     # 1. Add User Message
@@ -296,8 +386,7 @@ if prompt := st.chat_input("What do you want to learn?"):
                     # Update sidebar stats immediately
                     update_stats_display()
                     
-                    # Render results immediately
-                    hint_text = render_books(path, category)
+                    hint_text = get_hint_for_category(category)
                     
                     # Generate Rationale
                     rationale_text = ""
@@ -314,15 +403,21 @@ if prompt := st.chat_input("What do you want to learn?"):
                         # Save to session state for export
                         st.session_state.current_path_data = {
                             "category": category,
+                            "subcategory": args.get("subcategory"),
                             "level": level,
+                            "style": args.get("style"),
+                            "depth": depth,
+                            "user_query": prompt,
                             "books": path.to_dict('records'),
                             "rationale": rationale_text,
+                            "rationale_stale": False,
                             "hint": hint_text
                         }
                     
                     # Save a summary message to history so context is preserved
                     success_msg = f"I've generated a {depth} reading path for **{category}** ({args.get('level')})."
                     st.session_state.messages.append({"role": "assistant", "content": success_msg})
+                    st.rerun()
                     
                 else:
                     # Normal text response

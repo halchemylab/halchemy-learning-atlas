@@ -1,5 +1,4 @@
 from fpdf import FPDF
-import tempfile
 
 class PDFReport(FPDF):
     def header(self):
@@ -70,4 +69,8 @@ def generate_pdf(path_data):
     hint = hint.encode('latin-1', 'replace').decode('latin-1')
     pdf.multi_cell(0, 6, hint)
 
-    return pdf.output(dest='S').encode('latin-1')
+    output = pdf.output(dest='S')
+    if isinstance(output, str):
+        return output.encode('latin-1')
+
+    return bytes(output)
