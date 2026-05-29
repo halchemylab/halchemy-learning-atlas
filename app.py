@@ -111,9 +111,45 @@ if "current_path_data" not in st.session_state:
     st.session_state.current_path_data = None
 
 # --- Helper Functions ---
+@st.cache_data(show_spinner=False)
 def books_to_dataframe(books):
     """Converts stored book records back into a DataFrame for rendering."""
     return pd.DataFrame(books)
+
+@st.cache_data(show_spinner=False)
+def build_markdown_export(data):
+    """Builds the Markdown export content for a reading path."""
+    lines = [
+        f"# Learning Path: {data['category'].title()} ({data['level'].title()})",
+        "",
+        f"**Rationale:** {data['rationale']}",
+        "",
+        "## The Books",
+        "",
+    ]
+
+    for i, book in enumerate(data['books'], 1):
+        lines.extend([
+            f"### {i}. {book['title']}",
+            f"*Author: {book['author']}*",
+            "",
+            book['short_description'],
+            "",
+            f"[Buy Link]({book['store_url']})",
+            "",
+        ])
+
+    lines.extend([
+        "---",
+        "",
+        f"## Expert Hint\n{data['hint']}",
+    ])
+    return "\n".join(lines)
+
+@st.cache_data(show_spinner=False)
+def build_pdf_export(data):
+    """Builds the PDF export once per unique reading path."""
+    return generate_pdf(data)
 
 def update_current_path_books(books):
     """Persists edited books and marks the AI rationale as stale."""
@@ -220,6 +256,14 @@ def render_books(path, category):
 def render_path_editor(data):
     """Renders manual controls for editing the current reading path."""
     books = data["books"]
+    replacement_candidates = get_replacement_candidates(
+        st.session_state.books_df,
+        books,
+        category=data["category"],
+        subcategory=data.get("subcategory"),
+        level=data.get("level", "beginner"),
+        style=data.get("style"),
+    )
     st.markdown("### Edit Path")
 
     if len(books) < 3:
@@ -244,29 +288,21 @@ def render_path_editor(data):
                     update_current_path_books(remove_book(books, index))
                     st.rerun()
 
-            candidates = get_replacement_candidates(
-                st.session_state.books_df,
-                books,
-                category=data["category"],
-                subcategory=data.get("subcategory"),
-                level=data.get("level", "beginner"),
-                style=data.get("style"),
-            )
-
-            if candidates:
+            if replacement_candidates:
                 selected_label = st.selectbox(
                     "Replacement",
-                    options=list(range(len(candidates))),
+                    options=list(range(len(replacement_candidates))),
                     format_func=lambda candidate_index: (
-                        f"{candidates[candidate_index]['title']} by {candidates[candidate_index]['author']} "
-                        f"| Difficulty {candidates[candidate_index]['difficulty']} "
-                        f"| Readability {candidates[candidate_index]['readability']}"
+                        f"{replacement_candidates[candidate_index]['title']} by "
+                        f"{replacement_candidates[candidate_index]['author']} "
+                        f"| Difficulty {replacement_candidates[candidate_index]['difficulty']} "
+                        f"| Readability {replacement_candidates[candidate_index]['readability']}"
                     ),
                     key=f"replacement_{index}_{book['id']}",
                     label_visibility="collapsed",
                 )
                 if st.button("Replace this step", key=f"replace_{index}_{book['id']}"):
-                    replacement = candidates[selected_label]
+                    replacement = replacement_candidates[selected_label]
                     update_current_path_books(replace_book(books, index, replacement))
                     st.rerun()
             else:
@@ -304,18 +340,7 @@ if st.session_state.current_path_data:
     st.sidebar.header("📥 Export")
     
     data = st.session_state.current_path_data
-    markdown_content = f"# Learning Path: {data['category'].title()} ({data['level'].title()})\n\n"
-    markdown_content += f"**Rationale:** {data['rationale']}\n\n"
-    markdown_content += "## The Books\n\n"
-    
-    for i, book in enumerate(data['books'], 1):
-        markdown_content += f"### {i}. {book['title']}\n"
-        markdown_content += f"*Author: {book['author']}*\n\n"
-        markdown_content += f"{book['short_description']}\n\n"
-        markdown_content += f"[Buy Link]({book['store_url']})\n\n"
-    
-    markdown_content += "---\n\n"
-    markdown_content += f"## Expert Hint\n{data['hint']}"
+    markdown_content = build_markdown_export(data)
     
     st.sidebar.download_button(
         label="Download Curriculum (.md)",
@@ -324,11 +349,9 @@ if st.session_state.current_path_data:
         mime="text/markdown"
     )
 
-    # Generate PDF on demand
-    pdf_bytes = generate_pdf(data)
     st.sidebar.download_button(
         label="Download Curriculum (.pdf)",
-        data=pdf_bytes,
+        data=build_pdf_export(data),
         file_name=f"halchemy_path_{data['category']}.pdf",
         mime="application/pdf"
     )
