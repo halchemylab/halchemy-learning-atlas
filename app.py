@@ -6,15 +6,19 @@ load_dotenv()
 import streamlit as st
 import pandas as pd
 import json
+import logging
 import os
 import graphviz
 from openai import OpenAI
 from src.books import load_books, filter_books, sequence_books, get_hint_for_category, DataLoadingError
-from src.llm_client import get_chat_completion, get_sequence_rationale
+from src.llm_client import LLMClientError, get_chat_completion, get_sequence_rationale
 from src.path_editor import get_replacement_candidates, move_book, remove_book, replace_book
 from src.roi import load_stats, increment_stats
 from src.utils import fetch_book_cover
 from src.pdf_gen import generate_pdf
+
+
+logger = logging.getLogger(__name__)
 
 # --- Page Config ---
 st.set_page_config(
@@ -378,7 +382,16 @@ if prompt := st.chat_input("What do you want to learn?"):
                 if response_message.tool_calls:
                     # The LLM wants to run the search!
                     tool_call = response_message.tool_calls[0]
-                    args = json.loads(tool_call.function.arguments)
+                    try:
+                        args = json.loads(tool_call.function.arguments)
+                    except json.JSONDecodeError as exc:
+                        logger.warning("Invalid tool arguments from LLM: %s", tool_call.function.arguments, exc_info=True)
+                        st.error("I couldn't read the model's search parameters. Please try rephrasing your request.")
+                        st.session_state.messages.append({
+                            "role": "assistant",
+                            "content": "I couldn't read the model's search parameters. Please try rephrasing your request."
+                        })
+                        st.stop()
                     
                     # Execute Logic
                     path, category, depth, level = execute_recommendation(args)
@@ -425,5 +438,9 @@ if prompt := st.chat_input("What do you want to learn?"):
                     st.markdown(content)
                     st.session_state.messages.append({"role": "assistant", "content": content})
             
+            except LLMClientError as e:
+                st.error(e.user_message)
+                st.session_state.messages.append({"role": "assistant", "content": e.user_message})
             except Exception as e:
-                st.error(f"An error occurred: {e}")
+                logger.exception("Unexpected app error while handling chat input")
+                st.error("An unexpected error occurred. Check the app logs for details.")

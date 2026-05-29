@@ -1,8 +1,36 @@
-import os
-from openai import OpenAI
+import logging
+
+from openai import OpenAI, OpenAIError
 from typing import List, Dict, Any
 
 from src.books import load_books, get_unique_values
+
+
+logger = logging.getLogger(__name__)
+
+
+class LLMClientError(RuntimeError):
+    """Raised when an LLM request fails in a way the UI can explain."""
+
+    def __init__(self, user_message: str):
+        super().__init__(user_message)
+        self.user_message = user_message
+
+
+def _message_for_openai_error(exc: OpenAIError) -> str:
+    """Maps OpenAI SDK errors to user-facing recovery messages."""
+    error_name = type(exc).__name__
+
+    if error_name == "AuthenticationError":
+        return "OpenAI authentication failed. Check that your API key is valid."
+    if error_name == "RateLimitError":
+        return "OpenAI rate limit reached. Please wait a moment and try again."
+    if error_name in {"APIConnectionError", "APITimeoutError"}:
+        return "Could not reach OpenAI. Check your network connection and try again."
+    if error_name == "APIStatusError":
+        return "OpenAI returned an API error. Please try again shortly."
+
+    return "The OpenAI request failed. Please try again."
 
 # Load data dynamically to constrain the LLM
 try:
@@ -89,13 +117,17 @@ def get_chat_completion(
     # Ensure system prompt is at the start
     full_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
 
-    response = client.chat.completions.create(
-        model=model,
-        messages=full_messages,
-        tools=TOOLS,
-        tool_choice="auto",
-        temperature=temperature
-    )
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=full_messages,
+            tools=TOOLS,
+            tool_choice="auto",
+            temperature=temperature
+        )
+    except OpenAIError as exc:
+        logger.exception("OpenAI chat completion failed")
+        raise LLMClientError(_message_for_openai_error(exc)) from exc
     
     return response.choices[0].message
 
@@ -131,5 +163,6 @@ def get_sequence_rationale(
             temperature=0.7
         )
         return response.choices[0].message.content
-    except Exception as e:
-        return "Enjoy your reading path!"
+    except OpenAIError as exc:
+        logger.warning("OpenAI rationale generation failed: %s", exc, exc_info=True)
+        return "I couldn't generate a rationale right now, but your reading path is still ready."
