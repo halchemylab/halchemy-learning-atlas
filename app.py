@@ -10,12 +10,13 @@ import logging
 import os
 import graphviz
 from openai import OpenAI
-from src.books import load_books, filter_books, sequence_books, get_hint_for_category, DataLoadingError
+from src.books import load_books, get_hint_for_category, DataLoadingError
+from src.exports import build_markdown_export, build_pdf_export
 from src.llm_client import LLMClientError, get_chat_completion, get_sequence_rationale
 from src.path_editor import get_replacement_candidates, move_book, remove_book, replace_book
-from src.roi import load_stats, increment_stats
+from src.recommendations import execute_recommendation
+from src.roi import load_stats
 from src.utils import fetch_book_cover
-from src.pdf_gen import generate_pdf
 
 
 logger = logging.getLogger(__name__)
@@ -116,68 +117,10 @@ def books_to_dataframe(books):
     """Converts stored book records back into a DataFrame for rendering."""
     return pd.DataFrame(books)
 
-@st.cache_data(show_spinner=False)
-def build_markdown_export(data):
-    """Builds the Markdown export content for a reading path."""
-    lines = [
-        f"# Learning Path: {data['category'].title()} ({data['level'].title()})",
-        "",
-        f"**Rationale:** {data['rationale']}",
-        "",
-        "## The Books",
-        "",
-    ]
-
-    for i, book in enumerate(data['books'], 1):
-        lines.extend([
-            f"### {i}. {book['title']}",
-            f"*Author: {book['author']}*",
-            "",
-            book['short_description'],
-            "",
-            f"[Buy Link]({book['store_url']})",
-            "",
-        ])
-
-    lines.extend([
-        "---",
-        "",
-        f"## Expert Hint\n{data['hint']}",
-    ])
-    return "\n".join(lines)
-
-@st.cache_data(show_spinner=False)
-def build_pdf_export(data):
-    """Builds the PDF export once per unique reading path."""
-    return generate_pdf(data)
-
 def update_current_path_books(books):
     """Persists edited books and marks the AI rationale as stale."""
     st.session_state.current_path_data["books"] = books
     st.session_state.current_path_data["rationale_stale"] = True
-
-def execute_recommendation(args):
-    """Executes the deterministic book logic based on LLM-extracted args."""
-    category = args.get("category")
-    subcategory = args.get("subcategory")
-    level = args.get("level", "beginner")
-    style = args.get("style")
-    depth = args.get("depth", "short")
-
-    filtered = filter_books(
-        st.session_state.books_df,
-        category=category,
-        subcategory=subcategory,
-        level=level,
-        style_pref=style
-    )
-    
-    path = sequence_books(filtered, depth=depth)
-    
-    # Increment stats only if we actually ran a search
-    increment_stats(num_books=len(path), category=category)
-    
-    return path, category, depth, level
 
 def render_roadmap(path):
     """Generates a Graphviz visualization of the learning path."""
@@ -417,7 +360,11 @@ if prompt := st.chat_input("What do you want to learn?"):
                         st.stop()
                     
                     # Execute Logic
-                    path, category, depth, level = execute_recommendation(args)
+                    result = execute_recommendation(st.session_state.books_df, args)
+                    path = result.path
+                    category = result.category
+                    depth = result.depth
+                    level = result.level
                     
                     # Update sidebar stats immediately
                     update_stats_display()
@@ -441,7 +388,7 @@ if prompt := st.chat_input("What do you want to learn?"):
                             "category": category,
                             "subcategory": args.get("subcategory"),
                             "level": level,
-                            "style": args.get("style"),
+                            "style": result.style,
                             "depth": depth,
                             "user_query": prompt,
                             "books": path.to_dict('records'),
