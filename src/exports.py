@@ -1,4 +1,5 @@
 from src.pdf_gen import generate_pdf
+from src.books import get_purchase_url
 
 
 def build_markdown_export(data):
@@ -20,10 +21,11 @@ def build_markdown_export(data):
                 "",
                 book["short_description"],
                 "",
-                f"[Buy Link]({book['store_url']})",
-                "",
             ]
         )
+        purchase_url = get_purchase_url(book)
+        if purchase_url:
+            lines.extend([f"[Buy Link]({purchase_url})", ""])
 
     lines.extend(
         [

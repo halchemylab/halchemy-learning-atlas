@@ -1,6 +1,6 @@
 import unittest
 import pandas as pd
-from src.books import validate_books
+from src.books import normalize_books, validate_books
 
 class TestBookValidation(unittest.TestCase):
     def setUp(self):
@@ -14,6 +14,8 @@ class TestBookValidation(unittest.TestCase):
             'readability': [3],
             'style': ['tactical'],
             'learning_type': ['behavioral'],
+            'short_description': ['Short description.'],
+            'store_url': ['https://example.com'],
             'is_beginner_friendly': [True],
             'is_intermediate': [False],
             'is_advanced': [False]
@@ -54,6 +56,18 @@ class TestBookValidation(unittest.TestCase):
         with self.assertRaises(ValueError) as cm:
             validate_books(df)
         self.assertIn("Duplicate book IDs", str(cm.exception))
+
+    def test_normalize_books_parses_boolean_strings(self):
+        data = self.valid_data.copy()
+        data['is_beginner_friendly'] = ['True']
+        data['is_intermediate'] = ['False']
+        data['is_advanced'] = ['0']
+
+        df = normalize_books(pd.DataFrame(data))
+
+        self.assertTrue(df.loc[0, 'is_beginner_friendly'])
+        self.assertFalse(df.loc[0, 'is_intermediate'])
+        self.assertFalse(df.loc[0, 'is_advanced'])
 
 if __name__ == '__main__':
     unittest.main()

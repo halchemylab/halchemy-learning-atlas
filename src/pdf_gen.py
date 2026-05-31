@@ -1,5 +1,7 @@
 from fpdf import FPDF
 
+from src.books import get_purchase_url
+
 class PDFReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 16)
@@ -52,7 +54,7 @@ def generate_pdf(path_data):
         desc = desc.encode('latin-1', 'replace').decode('latin-1')
         pdf.multi_cell(0, 6, desc)
         
-        link = book.get('store_url', '')
+        link = get_purchase_url(book)
         if link:
             pdf.set_text_color(0, 0, 255)
             pdf.cell(0, 6, "Buy Link", link=link, ln=1)

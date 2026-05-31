@@ -10,7 +10,7 @@ import logging
 import os
 import graphviz
 from openai import OpenAI
-from src.books import load_books, get_hint_for_category, DataLoadingError
+from src.books import load_books, get_hint_for_category, get_purchase_url, DataLoadingError
 from src.exports import build_markdown_export, build_pdf_export
 from src.llm_client import LLMClientError, get_chat_completion, get_sequence_rationale
 from src.path_editor import get_replacement_candidates, move_book, remove_book, replace_book
@@ -188,7 +188,11 @@ def render_books(path, category):
                 
                 st.caption(book['short_description'])
             with col2:
-                st.link_button("Buy Book", book['store_url'])
+                purchase_url = get_purchase_url(book)
+                if purchase_url:
+                    st.link_button("Buy Book", purchase_url)
+                else:
+                    st.caption("No purchase link")
     
     # Hint Section
     st.markdown("---")
@@ -396,6 +400,14 @@ if prompt := st.chat_input("What do you want to learn?"):
                             "rationale_stale": False,
                             "hint": hint_text
                         }
+                    else:
+                        no_results_msg = (
+                            "I couldn't find enough books matching those exact criteria. "
+                            "Try a broader category, level, or style."
+                        )
+                        st.warning(no_results_msg)
+                        st.session_state.messages.append({"role": "assistant", "content": no_results_msg})
+                        st.stop()
                     
                     # Save a summary message to history so context is preserved
                     success_msg = f"I've generated a {depth} reading path for **{category}** ({args.get('level')})."

@@ -38,7 +38,8 @@ def execute_recommendation(
     )
 
     path = sequence_books(filtered, depth=depth)
-    stats_incrementer(num_books=len(path), category=category)
+    if not path.empty:
+        stats_incrementer(num_books=len(path), category=category)
 
     return RecommendationResult(
         path=path,

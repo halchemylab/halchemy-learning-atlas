@@ -1,20 +1,49 @@
 import pandas as pd
 import os
-from typing import List, Dict, Optional
+import re
+from typing import List, Mapping, Optional
 
 # Constants for file paths
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 BOOKS_FILE = os.path.join(DATA_DIR, 'books.csv')
+BOOL_COLS = ['is_beginner_friendly', 'is_intermediate', 'is_advanced']
 
 class DataLoadingError(Exception):
     """Exception raised for errors in loading the books dataset."""
     pass
+
+
+def _parse_bool(value: object) -> bool:
+    """Parses CSV-friendly boolean values without treating every string as true."""
+    if isinstance(value, bool):
+        return value
+    if pd.isna(value):
+        return False
+
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "1", "yes", "y"}:
+        return True
+    if normalized in {"false", "0", "no", "n", ""}:
+        return False
+
+    raise ValueError(f"Invalid boolean value: {value}")
+
+
+def normalize_books(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalizes loaded book data into the types expected by the recommender."""
+    normalized = df.copy()
+    for col in BOOL_COLS:
+        if col in normalized.columns:
+            normalized[col] = normalized[col].map(_parse_bool)
+    return normalized
+
 
 def validate_books(df: pd.DataFrame) -> None:
     """Validates the books DataFrame schema and content."""
     required_cols = [
         'id', 'title', 'author', 'category', 'subcategory', 
         'difficulty', 'readability', 'style', 'learning_type',
+        'short_description', 'store_url',
         'is_beginner_friendly', 'is_intermediate', 'is_advanced'
     ]
     
@@ -34,19 +63,17 @@ def validate_books(df: pd.DataFrame) -> None:
     if not df['id'].is_unique:
         raise ValueError("Duplicate book IDs found")
 
+    for col in BOOL_COLS:
+        if not df[col].map(lambda value: isinstance(value, bool)).all():
+            raise ValueError(f"Column '{col}' contains non-boolean values")
+
 def load_books() -> pd.DataFrame:
     """Loads and validates the books dataset from the CSV file."""
     if not os.path.exists(BOOKS_FILE):
         raise DataLoadingError(f"Books data file not found at: {BOOKS_FILE}")
 
     try:
-        df = pd.read_csv(BOOKS_FILE)
-        
-        # Ensure boolean columns are actually booleans
-        bool_cols = ['is_beginner_friendly', 'is_intermediate', 'is_advanced']
-        for col in bool_cols:
-            if col in df.columns:
-                 df[col] = df[col].astype(bool)
+        df = normalize_books(pd.read_csv(BOOKS_FILE))
         
         validate_books(df)
         return df
@@ -72,15 +99,19 @@ def filter_books(
     """
     if df.empty:
         return df
+    if not category:
+        return df.iloc[0:0].copy()
 
     # 1. Filter by Category
     # Case-insensitive matching
-    filtered = df[df['category'].str.lower() == category.lower()].copy()
+    category_key = str(category).strip().lower()
+    filtered = df[df['category'].fillna('').str.lower() == category_key].copy()
     
     # 2. Filter by Subcategory (if provided and exists in data)
     if subcategory and not filtered.empty:
         # Only filter if the subcategory actually has matches, otherwise stay broad
-        sub_matches = filtered[filtered['subcategory'].str.lower() == subcategory.lower()]
+        subcategory_key = str(subcategory).strip().lower()
+        sub_matches = filtered[filtered['subcategory'].fillna('').str.lower() == subcategory_key]
         if not sub_matches.empty:
             filtered = sub_matches
 
@@ -89,16 +120,18 @@ def filter_books(
     # If intermediate, we want is_intermediate = True
     # If advanced, we want is_advanced = True
     if not filtered.empty:
-        if level == "beginner":
+        level_key = str(level or "").strip().lower()
+        if level_key == "beginner":
             filtered = filtered[filtered['is_beginner_friendly'] == True]
-        elif level == "intermediate":
+        elif level_key == "intermediate":
             filtered = filtered[filtered['is_intermediate'] == True]
-        elif level == "advanced":
+        elif level_key == "advanced":
             filtered = filtered[filtered['is_advanced'] == True]
 
     # 4. Filter by Style (soft filter - prefer if possible, but don't empty the list)
     if style_pref and not filtered.empty:
-        style_matches = filtered[filtered['style'].str.lower() == style_pref.lower()]
+        style_key = str(style_pref).strip().lower()
+        style_matches = filtered[filtered['style'].fillna('').str.lower() == style_key]
         # If we have enough matches with the style, use them. 
         # Otherwise, keep the mixed bag so we don't return 0 results.
         if len(style_matches) >= 3:
@@ -133,15 +166,16 @@ def sequence_books(
         candidates = candidates.sort_values(by=['difficulty', 'readability'], ascending=[True, False])
         
     elif learning_type == 'narrative-history':
-        # Sort chronological if possible
-        # Note: chronology_hint might be mixed strings/ints. 
-        # For MVP, we'll try to coerce to numeric or just rely on ID/metadata order if complex.
-        # Let's try a simple approach: separate 'Ancient' vs years.
-        # For now, let's sort by difficulty as a proxy for accessibility, or keep original order
-        # if curated well.
-        # A better MVP heuristic: Sort by 'chronology_hint' treating it as string for now,
-        # or rely on difficulty for entry point.
-        candidates = candidates.sort_values(by=['chronology_hint', 'difficulty'], ascending=[True, True])
+        if 'chronology_hint' in candidates.columns:
+            candidates = candidates.assign(
+                _chronology_sort=candidates['chronology_hint'].map(_chronology_sort_value)
+            )
+            candidates = candidates.sort_values(
+                by=['_chronology_sort', 'difficulty'],
+                ascending=[True, True],
+            ).drop(columns=['_chronology_sort'])
+        else:
+            candidates = candidates.sort_values(by=['difficulty', 'readability'], ascending=[True, False])
         
     elif learning_type == 'behavioral-skill':
         # Habits/Leadership: Fundamentals (low difficulty) -> Application (tactical)
@@ -163,6 +197,7 @@ def get_unique_values(df: pd.DataFrame, column: str) -> List[str]:
 
 def get_hint_for_category(category: str) -> str:
     """Returns domain-specific advice for the result page."""
+    category_key = str(category or "").lower()
     hints = {
         "habits": "Focus on **one small change** at a time. Don't try to read all these at once; pick the first one, implement a single micro-habit (e.g., 'floss one tooth'), and track it for 2 weeks before adding more.",
         "coding": "Reading code is different from reading prose. **Type out the examples** manually (don't copy-paste). Build a tiny project after each chapter to cement the concepts.",
@@ -171,4 +206,32 @@ def get_hint_for_category(category: str) -> str:
         "productivity": "Productivity isn't about doing *more*, it's about doing the *right* things. Pick **one system** (like GTD or Deep Work) and stick to it for 30 days. consistency beats intensity.",
         "business": "Take notes on **mental models**. Ask yourself: 'How can I apply this principle to my current project or team?' Business books are toolkits, not novels."
     }
-    return hints.get(category.lower(), "Read actively. Take notes, highlight key passages, and try to explain the concepts to someone else to test your understanding.")
+    return hints.get(category_key, "Read actively. Take notes, highlight key passages, and try to explain the concepts to someone else to test your understanding.")
+
+
+def get_purchase_url(book: Mapping[str, object]) -> Optional[str]:
+    """Returns the preferred purchase URL, favoring affiliate links when available."""
+    for field in ("affiliate_url", "store_url"):
+        value = book.get(field)
+        if pd.notna(value) and str(value).strip():
+            return str(value).strip()
+    return None
+
+
+def _chronology_sort_value(value: object) -> int:
+    """Converts chronology hints to sortable values with unknowns at the end."""
+    if pd.isna(value) or str(value).strip() == "":
+        return 10**9
+
+    text = str(value).strip().lower()
+    if text in {"ancient", "prehistory", "prehistoric"}:
+        return -10**9
+
+    match = re.search(r"-?\d+", text)
+    if not match:
+        return 10**9
+
+    year = int(match.group(0))
+    if "bc" in text or "bce" in text:
+        return -abs(year)
+    return year

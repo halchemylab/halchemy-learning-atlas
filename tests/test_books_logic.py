@@ -1,6 +1,6 @@
 import unittest
 import pandas as pd
-from src.books import filter_books, sequence_books
+from src.books import filter_books, get_purchase_url, sequence_books
 
 class TestBooksLogic(unittest.TestCase):
     def setUp(self):
@@ -30,6 +30,10 @@ class TestBooksLogic(unittest.TestCase):
         
         filtered_lower = filter_books(self.df, category="habits", level="all")
         self.assertEqual(len(filtered_lower), 5)
+
+    def test_filter_missing_category_returns_empty(self):
+        filtered = filter_books(self.df, category=None, level="all")
+        self.assertTrue(filtered.empty)
 
     def test_filter_subcategory_success(self):
         filtered = filter_books(self.df, category="Coding", subcategory="python", level="all")
@@ -90,6 +94,25 @@ class TestBooksLogic(unittest.TestCase):
         
         result_ids = sequenced['id'].tolist()
         self.assertEqual(result_ids, [1, 2, 3, 4, 5])
+
+    def test_sequence_history_tolerates_missing_chronology_hint(self):
+        df = self.df[self.df['category'] == 'Habits'].copy()
+        df['learning_type'] = 'narrative-history'
+        df = df.drop(columns=['chronology_hint'])
+
+        sequenced = sequence_books(df, depth="short")
+
+        self.assertEqual(sequenced['id'].tolist(), [1, 2, 3])
+
+    def test_get_purchase_url_prefers_affiliate_url(self):
+        url = get_purchase_url(
+            {
+                "store_url": "https://store.example.com",
+                "affiliate_url": "https://affiliate.example.com",
+            }
+        )
+
+        self.assertEqual(url, "https://affiliate.example.com")
 
 if __name__ == '__main__':
     unittest.main()

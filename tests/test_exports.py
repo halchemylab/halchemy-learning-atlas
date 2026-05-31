@@ -17,6 +17,7 @@ class TestExports(unittest.TestCase):
                         "author": "Test Author",
                         "short_description": "A short description.",
                         "store_url": "https://example.com",
+                        "affiliate_url": "https://affiliate.example.com",
                     }
                 ],
             }
@@ -24,7 +25,7 @@ class TestExports(unittest.TestCase):
 
         self.assertIn("# Learning Path: Coding (Beginner)", markdown)
         self.assertIn("### 1. Test Book", markdown)
-        self.assertIn("[Buy Link](https://example.com)", markdown)
+        self.assertIn("[Buy Link](https://affiliate.example.com)", markdown)
 
 
 if __name__ == "__main__":
