@@ -19,7 +19,7 @@ It combines a **curated dataset** (to prevent AI hallucinations) with a **determ
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Python 3.8+
+- Python 3.11+
 - [Graphviz](https://graphviz.org/download/) (required for visual roadmaps)
 
 ### Installation
@@ -40,12 +40,12 @@ It combines a **curated dataset** (to prevent AI hallucinations) with a **determ
 3. **Create a virtual environment:**
    ```bash
    # Windows
-   python -m venv venv
-   .\venv\Scripts\activate
+   python -m venv .venv
+   .\.venv\Scripts\activate
 
    # Mac/Linux
-   python3 -m venv venv
-   source venv/bin/activate
+   python3 -m venv .venv
+   source .venv/bin/activate
    ```
 
 4. **Install dependencies:**
@@ -79,6 +79,8 @@ Run tests using:
 ```bash
 python -m unittest discover tests
 ```
+
+CI runs the same command on Python 3.11, 3.12, and 3.13 using the pinned dependencies in `requirements-dev.txt`.
 
 ## 📂 Project Structure
 

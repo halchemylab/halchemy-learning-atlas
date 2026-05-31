@@ -1,7 +1,7 @@
-streamlit
-pandas
-python-dotenv
-openai
-requests
-fpdf
-graphviz
+streamlit==1.41.1
+pandas==2.3.3
+python-dotenv==1.0.1
+openai==1.59.7
+requests==2.32.3
+fpdf2==2.8.2
+graphviz==0.20.3
