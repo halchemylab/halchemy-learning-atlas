@@ -2,7 +2,7 @@
 
 **Halchemy Library** is an AI-assisted reading path recommender designed for *learning*, not just reading. Unlike standard book search tools, it focuses on building a structured "curriculum" of 3–7 books to take you from beginner to competent in a specific domain.
 
-It combines a **curated dataset** (to prevent AI hallucinations) with a **deterministic sequencing engine** and **LLM intelligence** (GPT-4) to provide personalized, logical learning journeys.
+It combines a **curated dataset** (to prevent AI hallucinations) with a **deterministic sequencing engine** and **OpenAI-powered chat** to provide personalized, logical learning journeys.
 
 ![Halchemy Library Screenshot](assets/halchemy_library_screenshot.png)
 
@@ -12,9 +12,10 @@ It combines a **curated dataset** (to prevent AI hallucinations) with a **determ
 - **Visual Roadmaps:** Automatic generation of learning maps using Graphviz to visualize your progression.
 - **Deterministic Sequencing:** Logic-based ordering of books (e.g., Procedural skills by difficulty, History chronologically).
 - **Expert Rationales:** AI-generated explanations of *why* each book was chosen for your specific path.
+- **Path Editing:** Reorder, remove, or replace books after a path is generated.
 - **Multiple Exports:** Download your curated curriculum as a clean Markdown file or a professional PDF.
 - **Library Stats:** Track your learning ROI with metrics on generated paths and recommended books.
-- **Affiliate Links:** Integrated links for direct purchasing of curated books.
+- **Purchase Links:** Integrated links for direct purchasing when available.
 
 ## 🚀 Getting Started
 
@@ -26,8 +27,8 @@ It combines a **curated dataset** (to prevent AI hallucinations) with a **determ
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/halchemy-library.git
-   cd halchemy-library
+   git clone https://github.com/halchemylab/halchemy-learning-atlas.git
+   cd halchemy-learning-atlas
    ```
 
 2. **Set up Environment Variables:**
@@ -89,11 +90,14 @@ CI runs the same command on Python 3.11, 3.12, and 3.13 using the pinned depende
 ├── app.py                 # Main Streamlit application
 ├── data/
 │   ├── books.csv          # Curated book metadata (Source of Truth)
-│   └── roi_stats.json     # Tracking for library metrics
+│   └── roi_stats.json     # Runtime metrics file, generated locally
 ├── src/
 │   ├── books.py           # Filtering and sequencing logic
+│   ├── exports.py         # Markdown and PDF export helpers
 │   ├── llm_client.py      # OpenAI integration
+│   ├── path_editor.py     # Path editing helpers
 │   ├── pdf_gen.py         # PDF report generation logic
+│   ├── recommendations.py # Recommendation orchestration
 │   ├── roi.py             # Stats tracking and ROI logic
 │   └── utils.py           # Utility functions (e.g., cover fetching)
 ├── tests/                 # Unit and integration tests
