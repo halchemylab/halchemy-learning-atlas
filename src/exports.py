@@ -4,14 +4,17 @@ from src.books import get_purchase_url
 
 def build_markdown_export(data):
     """Builds the Markdown export content for a reading path."""
+    path_title = data.get("title", f"{data['category'].title()} ({data['level'].title()})")
     lines = [
-        f"# Learning Path: {data['category'].title()} ({data['level'].title()})",
+        f"# Learning Path: {path_title}",
         "",
         f"**Rationale:** {data['rationale']}",
         "",
         "## The Books",
         "",
     ]
+    if data.get("rationale_stale"):
+        lines.insert(2, "*The explanation below predates your edits.*\n")
 
     for i, book in enumerate(data["books"], 1):
         lines.extend(

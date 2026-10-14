@@ -15,8 +15,9 @@ from src.exports import build_markdown_export, build_pdf_export
 from src.llm_client import LLMClientError, get_chat_completion, get_sequence_rationale
 from src.path_editor import get_replacement_candidates, move_book, remove_book, replace_book
 from src.recommendations import execute_recommendation
-from src.roi import load_stats
+from src.roi import load_stats, increment_stats
 from src.utils import fetch_book_cover
+from src.starter_paths import STARTER_PATHS, build_starter_path
 
 
 logger = logging.getLogger(__name__)
@@ -63,8 +64,7 @@ with st.sidebar:
     if not api_key:
         api_key = st.text_input("Enter OpenAI API Key", type="password")
         if not api_key:
-            st.warning("Please enter your OpenAI API Key to continue.")
-            st.stop()
+            st.info("Explore, edit, and download starter paths for free. Add an API key to customize with the AI librarian.")
     else:
         st.success("API Key loaded from environment.")
 
@@ -94,7 +94,7 @@ with st.sidebar:
     )
 
 # Initialize OpenAI Client
-client = OpenAI(api_key=api_key)
+client = OpenAI(api_key=api_key) if api_key else None
 
 # --- State Management ---
 if "messages" not in st.session_state:
@@ -258,8 +258,10 @@ def render_path_editor(data):
             st.divider()
 
     if data.get("rationale_stale"):
-        st.warning("The rationale was generated before your edits.")
-        if st.button("Refresh rationale"):
+        st.warning("The path explanation was written before your edits.")
+        if not client:
+            st.caption("Add an API key in the sidebar to refresh the explanation with AI.")
+        if st.button("Refresh rationale", disabled=client is None):
             with st.spinner("Refreshing rationale..."):
                 data["rationale"] = get_sequence_rationale(
                     client,
@@ -273,6 +275,29 @@ def render_path_editor(data):
 
 
 # --- Chat Interface ---
+
+# Starter paths are available before any AI configuration or conversation.
+st.markdown("### Start with a ready-made path")
+st.caption("Choose a topic to explore 3–4 curated books. No API key needed.")
+for column, starter in zip(st.columns(3), STARTER_PATHS):
+    with column:
+        with st.container(border=True):
+            st.markdown(f"**{starter['title']}**")
+            st.caption(f"{starter['audience']} · {len(starter['book_ids'])} books")
+            st.write(starter["goal"])
+            if st.button("Explore this path", key=f"starter_{starter['id']}"):
+                st.session_state.current_path_data = build_starter_path(
+                    st.session_state.books_df, starter["id"]
+                )
+                # Keep the AI conversation aligned with the newly selected path.
+                st.session_state.messages = [{
+                    "role": "assistant",
+                    "content": f"You're exploring {starter['title']}. Your current books, in order, are: "
+                    + "; ".join(book["title"] for book in st.session_state.current_path_data["books"])
+                    + ". You can edit the path below or tell me how you'd like to customize it.",
+                }]
+                increment_stats(num_books=len(starter["book_ids"]), category=starter["category"])
+                st.rerun()
 
 # Display Chat History
 for msg in st.session_state.messages:
@@ -305,21 +330,26 @@ if st.session_state.current_path_data:
 
 # Initial Greeting
 if not st.session_state.messages:
-    intro_msg = "Hello! I'm your librarian. Tell me what you want to learn (e.g., 'Python', 'Habits', 'History'), and I'll design a reading path for you."
+    intro_msg = "Hello! I'm your librarian. Explore a ready-made path above, or add an API key in the sidebar and tell me what you want to learn."
     st.session_state.messages.append({"role": "assistant", "content": intro_msg})
     st.rerun()
 
 # Current editable path
 if st.session_state.current_path_data:
     current_data = st.session_state.current_path_data
+    if current_data.get("title"):
+        st.markdown(f"## {current_data['title']}")
     current_path = books_to_dataframe(current_data["books"])
     render_books(current_path, current_data["category"])
     if current_data.get("rationale"):
         st.info(f"🤔 **Why this path?**\n\n{current_data['rationale']}")
     render_path_editor(current_data)
+    st.caption("Customize this path using the editor above, or describe your goals to the AI librarian below.")
 
 # Handle User Input
-if prompt := st.chat_input("What do you want to learn?"):
+if not client:
+    st.info("Add an OpenAI API key in the sidebar to chat with the librarian. Starter paths and manual edits are ready to use.")
+if prompt := st.chat_input("What do you want to learn or change about this path?", disabled=client is None):
     # 1. Add User Message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):

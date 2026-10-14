@@ -8,6 +8,7 @@ It combines a **curated dataset** (to prevent AI hallucinations) with a **determ
 
 ## ✨ Key Features
 
+- **Ready-made Starter Paths:** Explore Python (3 books, with an advanced stretch goal), habits (3 books), or world history (4 books) immediately. Browse, edit, and export these curated paths without an API key.
 - **AI Librarian (Chat-to-Query):** Interactive chat interface that translates your learning goals into structured queries.
 - **Visual Roadmaps:** Automatic generation of learning maps using Graphviz to visualize your progression.
 - **Deterministic Sequencing:** Logic-based ordering of books (e.g., Procedural skills by difficulty, History chronologically).
@@ -31,12 +32,13 @@ It combines a **curated dataset** (to prevent AI hallucinations) with a **determ
    cd halchemy-learning-atlas
    ```
 
-2. **Set up Environment Variables:**
+2. **Set up Environment Variables (optional for starter paths):**
    Copy the example environment file and add your OpenAI API key:
    ```bash
    cp .env.example .env
    # Edit .env and add your OPENAI_API_KEY
    ```
+   You can also enter your key in the app sidebar. A key is only required for AI chat and explanations; ready-made paths, manual editing, and downloads work without one.
 
 3. **Create a virtual environment:**
    ```bash
