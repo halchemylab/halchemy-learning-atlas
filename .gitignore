@@ -26,3 +26,6 @@ env/
 # My specific caches
 .pytest_cache/
 .env
+
+# Local runtime metrics
+/data/roi_stats.json
