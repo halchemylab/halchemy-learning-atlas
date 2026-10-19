@@ -103,8 +103,19 @@ def _add_hero(pdf: PDFReport, path_data: dict) -> None:
     books = path_data.get("books", [])
     depth = _title_case(path_data.get("depth"), "")
 
+    title = _clean_text(path_data.get("title")) or f"{category} Learning Path"
+    meta = f"{level} path | {len(books)} books"
+    if depth:
+        meta = f"{meta} | {depth} route"
+    pdf.set_font("DejaVu", "B", 24)
+    title_height = pdf.multi_cell(pdf.content_width, 9, title, dry_run=True,
+                                  output=MethodReturnValue.HEIGHT)
+    pdf.set_font("DejaVu", "", 10.5)
+    meta_height = pdf.multi_cell(pdf.content_width, 6, meta, dry_run=True,
+                                 output=MethodReturnValue.HEIGHT)
+    hero_height = max(50, 28 + title_height + meta_height)
     pdf.set_fill_color(*DARK)
-    pdf.rect(0, 0, pdf.w, 50, style="F")
+    pdf.rect(0, 0, pdf.w, hero_height, style="F")
     pdf.set_xy(pdf.l_margin, 13)
 
     pdf.set_font("DejaVu", "B", 8)
@@ -116,18 +127,15 @@ def _add_hero(pdf: PDFReport, path_data: dict) -> None:
     pdf.multi_cell(
         pdf.content_width,
         9,
-        f"{category} Learning Path",
+        title,
         new_x=XPos.LMARGIN,
         new_y=YPos.NEXT,
     )
 
-    meta = f"{level} path | {len(books)} books"
-    if depth:
-        meta = f"{meta} | {depth} route"
     pdf.set_font("DejaVu", "", 10.5)
     pdf.set_text_color(214, 224, 232)
-    pdf.cell(0, 6, meta, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_y(58)
+    pdf.multi_cell(pdf.content_width, 6, meta, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_y(hero_height + 8)
 
 
 def _wrapped_rows(pdf, text, width, size, style="", color=DARK, height=5.2, link=""):
@@ -246,6 +254,12 @@ def generate_pdf(path_data):
     pdf.rect(0, 50, pdf.w, pdf.h - 50, style="F")
 
     _add_hero(pdf, path_data)
+    if path_data.get("rationale_stale"):
+        _add_info_card(
+            pdf, "Explanation needs updating",
+            "The explanation below predates your edits. The reading sequence reflects your current path.",
+            fill_color=(255, 247, 225), accent_color=(168, 109, 20),
+        )
     _add_info_card(pdf, "Why this path", path_data.get("rationale", ""))
 
     books = path_data.get("books", [])

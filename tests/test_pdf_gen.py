@@ -36,6 +36,22 @@ class TestPdfGeneration(unittest.TestCase):
         self.assertTrue(any("/FontFile2" in font.get_object()["/DescendantFonts"][0].get_object()["/FontDescriptor"]
                             for font in fonts.values() if font.get_object().get("/Subtype") == "/Type0"))
 
+    def test_custom_title_and_stale_explanation_warning(self):
+        data = {"title": "My Personal Python Journey", "category": "coding", "level": "beginner",
+                "rationale": "Original explanation.", "rationale_stale": True,
+                "books": [{"title": "Current Book", "author": "Current Author"}]}
+        def text_for(value):
+            return "\n".join(page.extract_text() for page in PdfReader(BytesIO(generate_pdf(value))).pages)
+        text = text_for(data)
+        self.assertIn(data["title"], text)
+        self.assertNotIn("Coding Learning Path", text)
+        self.assertIn("predates your edits", text)
+        self.assertIn("Current Book", text)
+        data["rationale_stale"] = False
+        self.assertNotIn("predates your edits", text_for(data))
+        data["title"] = "  "
+        self.assertIn("Coding Learning Path", text_for(data))
+
     def test_generate_pdf_returns_bytes(self):
         pdf_bytes = generate_pdf(
             {
