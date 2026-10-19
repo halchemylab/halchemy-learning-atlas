@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 from fpdf import FPDF
 from fpdf.enums import MethodReturnValue, XPos, YPos
@@ -18,32 +19,18 @@ SOFT_GREEN = (235, 247, 241)
 
 
 def _clean_text(value: object) -> str:
-    """Converts app/LLM text into clean core-font-safe PDF text."""
+    """Converts app/LLM text into clean Unicode PDF text."""
     if value is None:
         return ""
 
     text = str(value)
-    replacements = {
-        "\u2018": "'",
-        "\u2019": "'",
-        "\u201c": '"',
-        "\u201d": '"',
-        "\u2013": "-",
-        "\u2014": "-",
-        "\u2026": "...",
-        "\u2022": "-",
-        "\u00a0": " ",
-    }
-    for source, replacement in replacements.items():
-        text = text.replace(source, replacement)
-
     text = re.sub(r"`([^`]*)`", r"\1", text)
     text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
     text = re.sub(r"\*([^*]+)\*", r"\1", text)
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip().encode("latin-1", "replace").decode("latin-1")
+    return text.strip()
 
 
 def _title_case(value: object, fallback: str = "Learning") -> str:
@@ -56,6 +43,10 @@ def _title_case(value: object, fallback: str = "Learning") -> str:
 class PDFReport(FPDF):
     def __init__(self):
         super().__init__(orientation="P", unit="mm", format="Letter")
+        # Bundle licensed fonts so exports work on any host without system fonts.
+        font_dir = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+        self.add_font("DejaVu", "", font_dir / "DejaVuSans.ttf")
+        self.add_font("DejaVu", "B", font_dir / "DejaVuSans-Bold.ttf")
         self.set_margins(16, 16, 16)
         self.set_auto_page_break(auto=True, margin=18)
 
@@ -72,7 +63,7 @@ class PDFReport(FPDF):
             return
 
         self.set_y(10)
-        self.set_font("helvetica", "B", 8)
+        self.set_font("DejaVu", "B", 8)
         self.set_text_color(*MUTED)
         self.cell(
             0,
@@ -88,7 +79,7 @@ class PDFReport(FPDF):
 
     def footer(self):
         self.set_y(-13)
-        self.set_font("helvetica", "", 8)
+        self.set_font("DejaVu", "", 8)
         self.set_text_color(*MUTED)
         self.cell(
             0,
@@ -101,7 +92,7 @@ class PDFReport(FPDF):
 
 
 def _draw_label(pdf: PDFReport, text: str) -> None:
-    pdf.set_font("helvetica", "B", 8)
+    pdf.set_font("DejaVu", "B", 8)
     pdf.set_text_color(*ACCENT_DARK)
     pdf.cell(0, 5, text.upper(), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
@@ -116,11 +107,11 @@ def _add_hero(pdf: PDFReport, path_data: dict) -> None:
     pdf.rect(0, 0, pdf.w, 50, style="F")
     pdf.set_xy(pdf.l_margin, 13)
 
-    pdf.set_font("helvetica", "B", 8)
+    pdf.set_font("DejaVu", "B", 8)
     pdf.set_text_color(141, 219, 226)
     pdf.cell(0, 5, "HALCHEMY LIBRARY", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
-    pdf.set_font("helvetica", "B", 24)
+    pdf.set_font("DejaVu", "B", 24)
     pdf.set_text_color(255, 255, 255)
     pdf.multi_cell(
         pdf.content_width,
@@ -133,7 +124,7 @@ def _add_hero(pdf: PDFReport, path_data: dict) -> None:
     meta = f"{level} path | {len(books)} books"
     if depth:
         meta = f"{meta} | {depth} route"
-    pdf.set_font("helvetica", "", 10.5)
+    pdf.set_font("DejaVu", "", 10.5)
     pdf.set_text_color(214, 224, 232)
     pdf.cell(0, 6, meta, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_y(58)
@@ -141,7 +132,7 @@ def _add_hero(pdf: PDFReport, path_data: dict) -> None:
 
 def _wrapped_rows(pdf, text, width, size, style="", color=DARK, height=5.2, link=""):
     """Measure with the same wrapping engine used to render the PDF."""
-    pdf.set_font("helvetica", style, size)
+    pdf.set_font("DejaVu", style, size)
     lines = pdf.multi_cell(
         width, height, _clean_text(text), dry_run=True,
         output=MethodReturnValue.LINES,
@@ -181,7 +172,7 @@ def _flow_card(pdf, rows, label, fill_color, accent_color):
         pdf.set_y(y + 12)
         for text, size, style, color, line_height, link in chunk:
             pdf.set_x(pdf.l_margin + padding)
-            pdf.set_font("helvetica", style, size)
+            pdf.set_font("DejaVu", style, size)
             pdf.set_text_color(*color)
             pdf.cell(width - 2 * padding, line_height, text, link=link,
                      new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -204,7 +195,7 @@ def _add_info_card(
 
 def _add_section_title(pdf: PDFReport, title: str) -> None:
     pdf.ensure_space(45)
-    pdf.set_font("helvetica", "B", 15)
+    pdf.set_font("DejaVu", "B", 15)
     pdf.set_text_color(*DARK)
     pdf.cell(0, 8, title, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_draw_color(*BORDER)
