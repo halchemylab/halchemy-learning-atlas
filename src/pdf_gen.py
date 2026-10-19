@@ -1,7 +1,7 @@
 import re
 
 from fpdf import FPDF
-from fpdf.enums import XPos, YPos
+from fpdf.enums import MethodReturnValue, XPos, YPos
 
 from src.books import get_purchase_url
 
@@ -51,29 +51,6 @@ def _title_case(value: object, fallback: str = "Learning") -> str:
     if not text:
         return fallback
     return text.replace("_", " ").replace("-", " ").title()
-
-
-def _line_count(pdf: FPDF, text: str, width: float) -> int:
-    """Approximates wrapped line count using the active font."""
-    paragraphs = text.split("\n") or [""]
-    total = 0
-    for paragraph in paragraphs:
-        words = paragraph.split()
-        if not words:
-            total += 1
-            continue
-
-        current = ""
-        for word in words:
-            candidate = word if not current else f"{current} {word}"
-            if pdf.get_string_width(candidate) <= width:
-                current = candidate
-            else:
-                total += 1
-                current = word
-        if current:
-            total += 1
-    return max(total, 1)
 
 
 class PDFReport(FPDF):
@@ -162,53 +139,71 @@ def _add_hero(pdf: PDFReport, path_data: dict) -> None:
     pdf.set_y(58)
 
 
+def _wrapped_rows(pdf, text, width, size, style="", color=DARK, height=5.2, link=""):
+    """Measure with the same wrapping engine used to render the PDF."""
+    pdf.set_font("helvetica", style, size)
+    lines = pdf.multi_cell(
+        width, height, _clean_text(text), dry_run=True,
+        output=MethodReturnValue.LINES,
+    )
+    return [(line, size, style, color, height, link) for line in lines]
+
+
+def _flow_card(pdf, rows, label, fill_color, accent_color):
+    """Keep normal cards together and split oversized cards into labeled panels."""
+    width = pdf.content_width
+    padding = 6
+    overhead = 19
+    full_height = overhead + sum(row[4] for row in rows)
+    page_capacity = pdf.page_break_trigger - 22
+    if full_height <= page_capacity:
+        pdf.ensure_space(full_height + 4)
+    continued = False
+    while rows:
+        pdf.ensure_space(overhead + rows[0][4] + 4)
+        y = pdf.get_y()
+        available = pdf.page_break_trigger - y - overhead - 4
+        count, body_height = 0, 0
+        for row in rows:
+            if body_height + row[4] > available:
+                break
+            body_height += row[4]
+            count += 1
+        chunk, rows = rows[:count], rows[count:]
+        height = overhead + body_height
+        pdf.set_fill_color(*fill_color)
+        pdf.set_draw_color(*BORDER)
+        pdf.rect(pdf.l_margin, y, width, height, style="DF", round_corners=True, corner_radius=2)
+        pdf.set_fill_color(*accent_color)
+        pdf.rect(pdf.l_margin, y, 2, height, style="F")
+        pdf.set_xy(pdf.l_margin + padding, y + 4)
+        _draw_label(pdf, label + (" (continued)" if continued else ""))
+        pdf.set_y(y + 12)
+        for text, size, style, color, line_height, link in chunk:
+            pdf.set_x(pdf.l_margin + padding)
+            pdf.set_font("helvetica", style, size)
+            pdf.set_text_color(*color)
+            pdf.cell(width - 2 * padding, line_height, text, link=link,
+                     new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_y(y + height + 4)
+        if rows:
+            pdf.add_page()
+            continued = True
+
+
 def _add_info_card(
-    pdf: PDFReport,
-    label: str,
-    body: object,
+    pdf: PDFReport, label: str, body: object,
     fill_color: tuple[int, int, int] = SOFT_BLUE,
     accent_color: tuple[int, int, int] = ACCENT,
 ) -> None:
-    text = _clean_text(body)
-    if not text:
+    if not _clean_text(body):
         return
-
-    x = pdf.l_margin
-    width = pdf.content_width
-    inner = 6
-    body_width = width - (inner * 2)
-    line_height = 5.2
-
-    pdf.set_font("helvetica", "", 10.5)
-    body_height = _line_count(pdf, text, body_width) * line_height
-    height = 16 + body_height
-
-    pdf.ensure_space(height + 8)
-    y = pdf.get_y()
-
-    pdf.set_fill_color(*fill_color)
-    pdf.set_draw_color(*fill_color)
-    pdf.rect(x, y, width, height, style="DF", round_corners=True, corner_radius=2)
-    pdf.set_fill_color(*accent_color)
-    pdf.rect(x, y, 2, height, style="F")
-
-    pdf.set_xy(x + inner, y + 4)
-    _draw_label(pdf, label)
-    pdf.set_font("helvetica", "", 10.5)
-    pdf.set_text_color(*DARK)
-    pdf.set_x(x + inner)
-    pdf.multi_cell(
-        body_width,
-        line_height,
-        text,
-        new_x=XPos.LMARGIN,
-        new_y=YPos.NEXT,
-    )
-    pdf.set_y(y + height + 6)
+    rows = _wrapped_rows(pdf, body, pdf.content_width - 12, 10.5)
+    _flow_card(pdf, rows, label, fill_color, accent_color)
 
 
 def _add_section_title(pdf: PDFReport, title: str) -> None:
-    pdf.ensure_space(14)
+    pdf.ensure_space(45)
     pdf.set_font("helvetica", "B", 15)
     pdf.set_text_color(*DARK)
     pdf.cell(0, 8, title, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -230,107 +225,18 @@ def _metric_text(book: dict) -> str:
 
 
 def _add_book_card(pdf: PDFReport, index: int, book: dict) -> None:
-    title = _clean_text(book.get("title", "Untitled Book"))
-    author = _clean_text(book.get("author", "Unknown Author"))
-    description = _clean_text(book.get("short_description", ""))
+    width = pdf.content_width - 12
+    rows = _wrapped_rows(pdf, book.get("title", "Untitled Book"), width, 12.5, "B", height=6)
+    rows += _wrapped_rows(pdf, f"by {book.get('author', 'Unknown Author')}", width, 9.5, color=MUTED)
+    if book.get("short_description"):
+        rows += _wrapped_rows(pdf, book["short_description"], width, 9.5, height=4.8)
     metrics = _metric_text(book)
+    if metrics:
+        rows += _wrapped_rows(pdf, metrics, width, 8.5, "B", MUTED)
     link = get_purchase_url(book)
-
-    x = pdf.l_margin
-    width = pdf.content_width
-    inner = 6
-    left_col = 21
-    text_x = x + inner + left_col
-    text_width = width - (inner * 2) - left_col
-
-    pdf.set_font("helvetica", "B", 12.5)
-    title_height = _line_count(pdf, title, text_width) * 6
-    pdf.set_font("helvetica", "", 9.5)
-    description_height = _line_count(pdf, description, text_width) * 4.8 if description else 0
-    height = 14 + title_height + description_height
-    if metrics:
-        height += 5
     if link:
-        height += 5
-    height = max(height, 34)
-
-    pdf.ensure_space(height + 5)
-    y = pdf.get_y()
-
-    pdf.set_fill_color(*CARD)
-    pdf.set_draw_color(*BORDER)
-    pdf.set_line_width(0.25)
-    pdf.rect(x, y, width, height, style="DF", round_corners=True, corner_radius=2)
-
-    pdf.set_fill_color(*ACCENT)
-    pdf.rect(x, y, 2, height, style="F")
-
-    pdf.set_xy(x + inner, y + 7)
-    pdf.set_fill_color(*SOFT_BLUE)
-    pdf.set_draw_color(*SOFT_BLUE)
-    pdf.rect(pdf.get_x(), pdf.get_y(), 15, 8, style="DF", round_corners=True, corner_radius=1.5)
-    pdf.set_xy(x + inner, y + 8.2)
-    pdf.set_font("helvetica", "B", 8)
-    pdf.set_text_color(*ACCENT_DARK)
-    pdf.cell(15, 4, f"{index:02d}", align="C")
-
-    pdf.set_xy(text_x, y + 5)
-    pdf.set_font("helvetica", "B", 12.5)
-    pdf.set_text_color(*DARK)
-    pdf.multi_cell(
-        text_width,
-        6,
-        title,
-        new_x=XPos.LMARGIN,
-        new_y=YPos.NEXT,
-    )
-
-    pdf.set_x(text_x)
-    pdf.set_font("helvetica", "", 9.5)
-    pdf.set_text_color(*MUTED)
-    pdf.cell(
-        text_width,
-        5,
-        f"by {author}",
-        new_x=XPos.LMARGIN,
-        new_y=YPos.NEXT,
-    )
-
-    if description:
-        pdf.ln(1.5)
-        pdf.set_x(text_x)
-        pdf.set_font("helvetica", "", 9.5)
-        pdf.set_text_color(*DARK)
-        pdf.multi_cell(
-            text_width,
-            4.8,
-            description,
-            new_x=XPos.LMARGIN,
-            new_y=YPos.NEXT,
-        )
-
-    if metrics:
-        pdf.ln(1.5)
-        pdf.set_x(text_x)
-        pdf.set_font("helvetica", "B", 8.5)
-        pdf.set_text_color(*MUTED)
-        pdf.cell(text_width, 4.5, metrics, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-
-    if link:
-        pdf.ln(1)
-        pdf.set_x(text_x)
-        pdf.set_font("helvetica", "B", 9)
-        pdf.set_text_color(*ACCENT_DARK)
-        pdf.cell(
-            30,
-            5,
-            "Buy book",
-            link=link,
-            new_x=XPos.LMARGIN,
-            new_y=YPos.NEXT,
-        )
-
-    pdf.set_y(y + height + 4)
+        rows += _wrapped_rows(pdf, "Buy book", width, 9, "B", ACCENT_DARK, link=link)
+    _flow_card(pdf, rows, f"Step {index:02d}", CARD, ACCENT)
 
 
 def generate_pdf(path_data):

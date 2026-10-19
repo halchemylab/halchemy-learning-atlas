@@ -1,9 +1,27 @@
 import unittest
+from io import BytesIO
+
+from pypdf import PdfReader
 
 from src.pdf_gen import generate_pdf
 
 
 class TestPdfGeneration(unittest.TestCase):
+    def test_long_content_wraps_and_continues_without_losing_text(self):
+        author = "A very long author name " * 18 + "AUTHOR_END"
+        description = "A detailed learning exercise. " * 450 + "DESCRIPTION_END"
+        rationale = "A useful reason to read. " * 450 + "RATIONALE_END"
+        content = generate_pdf({
+            "category": "coding", "level": "beginner", "rationale": rationale,
+            "books": [{"title": "Long title " * 24, "author": author,
+                       "short_description": description}],
+        })
+        reader = PdfReader(BytesIO(content))
+        text = "\n".join(page.extract_text() for page in reader.pages)
+        self.assertGreater(len(reader.pages), 3)
+        for marker in ("AUTHOR_END", "DESCRIPTION_END", "RATIONALE_END", "(CONTINUED)"):
+            self.assertIn(marker, text)
+
     def test_generate_pdf_returns_bytes(self):
         pdf_bytes = generate_pdf(
             {
