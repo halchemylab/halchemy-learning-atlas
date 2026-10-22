@@ -12,6 +12,7 @@ It combines a **curated dataset** (to prevent AI hallucinations) with a **determ
 - **AI Librarian (Chat-to-Query):** Interactive chat interface that translates your learning goals into structured queries.
 - **Visual Roadmaps:** Automatic generation of learning maps using Graphviz to visualize your progression.
 - **Deterministic Sequencing:** Logic-based ordering of books (e.g., Procedural skills by difficulty, History chronologically).
+- **Transparent Recommendations:** Notices explain when a subtopic is broadened, a style preference is relaxed, or fewer books are available than the requested path's minimum (3 for short, 5 for deep).
 - **Expert Rationales:** AI-generated explanations of *why* each book was chosen for your specific path.
 - **Path Editing:** Reorder, remove, or replace books after a path is generated.
 - **Multiple Exports:** Download your curated curriculum as a clean Markdown file or a professional PDF.

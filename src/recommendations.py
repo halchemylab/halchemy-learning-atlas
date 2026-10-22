@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import pandas as pd
 
@@ -15,6 +15,7 @@ class RecommendationResult:
     level: str
     style: Optional[str]
     depth: str
+    notices: Tuple[str, ...] = ()
 
 
 def execute_recommendation(
@@ -28,6 +29,7 @@ def execute_recommendation(
     level = args.get("level", "beginner")
     style = args.get("style")
     depth = args.get("depth", "short")
+    notices = []
 
     filtered = filter_books(
         books_df,
@@ -35,11 +37,22 @@ def execute_recommendation(
         subcategory=subcategory,
         level=level,
         style_pref=style,
+        notices=notices,
     )
 
     path = sequence_books(filtered, depth=depth)
     if not path.empty:
+        minimum_books = 3 if depth == "short" else 5
+        if len(path) < minimum_books:
+            count = len(path)
+            notices.append(
+                f'Only {count} matching {"book is" if count == 1 else "books are"} available. '
+                f'This {depth} path has fewer than the expected minimum of {minimum_books} books.'
+            )
         stats_incrementer(num_books=len(path), category=category)
+    else:
+        # There is no broader path to show when filtering yields no results.
+        notices.clear()
 
     return RecommendationResult(
         path=path,
@@ -48,4 +61,5 @@ def execute_recommendation(
         level=level,
         style=style,
         depth=depth,
+        notices=tuple(notices),
     )

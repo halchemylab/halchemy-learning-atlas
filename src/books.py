@@ -85,7 +85,8 @@ def filter_books(
     category: str,
     subcategory: Optional[str] = None,
     level: str = "beginner",
-    style_pref: Optional[str] = None
+    style_pref: Optional[str] = None,
+    notices: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """
     Filters the book dataframe based on user criteria.
@@ -96,6 +97,7 @@ def filter_books(
         subcategory: Specific topic (e.g., 'python').
         level: User's skill level ('beginner', 'intermediate', 'advanced').
         style_pref: Preferred style (e.g., 'tactical/how-to', 'story-driven').
+        notices: Optional list populated with explanations of relaxed criteria.
     """
     if df.empty:
         return df
@@ -114,6 +116,11 @@ def filter_books(
         sub_matches = filtered[filtered['subcategory'].fillna('').str.lower() == subcategory_key]
         if not sub_matches.empty:
             filtered = sub_matches
+        elif notices is not None:
+            notices.append(
+                f'No books cover the subtopic "{subcategory}" in {category}. '
+                f'Showing broader {category} recommendations instead.'
+            )
 
     # 3. Filter by Level (inclusive)
     # If beginner, we want is_beginner_friendly = True
@@ -136,6 +143,11 @@ def filter_books(
         # Otherwise, keep the mixed bag so we don't return 0 results.
         if len(style_matches) >= 3:
             filtered = style_matches
+        elif len(style_matches) < len(filtered) and notices is not None:
+            notices.append(
+                f'Fewer than 3 books match your preferred style "{style_pref}" '
+                f'({len(style_matches)} available). Including other styles to offer a fuller path.'
+            )
 
     return filtered
 

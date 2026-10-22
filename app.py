@@ -340,6 +340,10 @@ if st.session_state.current_path_data:
     if current_data.get("title"):
         st.markdown(f"## {current_data['title']}")
     current_path = books_to_dataframe(current_data["books"])
+    if current_data.get("notices"):
+        st.caption("When this path was generated:")
+        for notice in current_data["notices"]:
+            st.warning(notice)
     render_books(current_path, current_data["category"])
     if current_data.get("rationale"):
         st.info(f"🤔 **Why this path?**\n\n{current_data['rationale']}")
@@ -428,6 +432,7 @@ if prompt := st.chat_input("What do you want to learn or change about this path?
                             "books": path.to_dict('records'),
                             "rationale": rationale_text,
                             "rationale_stale": False,
+                            "notices": list(result.notices),
                             "hint": hint_text
                         }
                     else:
