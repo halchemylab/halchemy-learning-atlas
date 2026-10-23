@@ -1,3 +1,5 @@
+import streamlit as st
+
 from src.pdf_gen import generate_pdf
 from src.books import get_purchase_url
 
@@ -40,6 +42,7 @@ def build_markdown_export(data):
     return "\n".join(lines)
 
 
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=32)
 def build_pdf_export(data):
-    """Builds the PDF export content for a reading path."""
+    """Caches PDF bytes by path contents, regenerating them after edits."""
     return generate_pdf(data)

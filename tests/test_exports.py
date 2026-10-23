@@ -1,9 +1,35 @@
 import unittest
+from copy import deepcopy
+from unittest.mock import patch
 
-from src.exports import build_markdown_export
+from src.exports import build_markdown_export, build_pdf_export
 
 
 class TestExports(unittest.TestCase):
+    def test_pdf_cache_reuses_equal_paths_and_invalidates_after_edits(self):
+        build_pdf_export.clear()
+        self.addCleanup(build_pdf_export.clear)
+        data = {
+            "books": [{"title": "First Book"}, {"title": "Second Book"}],
+            "rationale": "Starts simple.",
+            "rationale_stale": False,
+        }
+
+        with patch("src.exports.generate_pdf", side_effect=[b"original", b"edited", b"refreshed"]) as generate:
+            self.assertEqual(build_pdf_export(data), b"original")
+            self.assertEqual(build_pdf_export(deepcopy(data)), b"original")
+            self.assertEqual(generate.call_count, 1)
+
+            data["books"].reverse()
+            data["rationale_stale"] = True
+            self.assertEqual(build_pdf_export(data), b"edited")
+            self.assertEqual(generate.call_count, 2)
+
+            data["rationale"] = "Updated explanation."
+            data["rationale_stale"] = False
+            self.assertEqual(build_pdf_export(data), b"refreshed")
+            self.assertEqual(generate.call_count, 3)
+
     def test_build_markdown_export_includes_path_details(self):
         markdown = build_markdown_export(
             {
