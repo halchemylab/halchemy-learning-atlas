@@ -10,7 +10,7 @@ import logging
 import os
 import graphviz
 from openai import OpenAI
-from src.books import load_books, get_hint_for_category, get_purchase_url, DataLoadingError
+from src.books import load_books, get_hint_for_category, get_purchase_url, get_unique_values, DataLoadingError
 from src.exports import build_markdown_export, build_pdf_export
 from src.llm_client import LLMClientError, get_chat_completion, get_sequence_rationale
 from src.path_editor import get_replacement_candidates, move_book, remove_book, replace_book
@@ -64,7 +64,7 @@ with st.sidebar:
     if not api_key:
         api_key = st.text_input("Enter OpenAI API Key", type="password")
         if not api_key:
-            st.info("Explore, edit, and download starter paths for free. Add an API key to customize with the AI librarian.")
+            st.info("Build, edit, and download reading paths without a key. Add an API key for chat and AI explanations.")
     else:
         st.success("API Key loaded from environment.")
 
@@ -259,9 +259,11 @@ def render_path_editor(data):
 
     if data.get("rationale_stale"):
         st.warning("The path explanation was written before your edits.")
+    if data.get("rationale_stale") or data.get("rationale_source") == "criteria":
         if not client:
-            st.caption("Add an API key in the sidebar to refresh the explanation with AI.")
-        if st.button("Refresh rationale", disabled=client is None):
+            st.caption("Add an API key in the sidebar for an AI explanation of this path.")
+        explanation_label = "Refresh rationale" if data.get("rationale_stale") else "Explain this path with AI"
+        if st.button(explanation_label, disabled=client is None):
             with st.spinner("Refreshing rationale..."):
                 data["rationale"] = get_sequence_rationale(
                     client,
@@ -270,6 +272,7 @@ def render_path_editor(data):
                     model=st.session_state.model,
                 )
                 data["rationale_stale"] = False
+                data["rationale_source"] = "ai"
                 st.session_state.current_path_data = data
                 st.rerun()
 
@@ -298,6 +301,75 @@ for column, starter in zip(st.columns(3), STARTER_PATHS):
                 }]
                 increment_stats(num_books=len(starter["book_ids"]), category=starter["category"])
                 st.rerun()
+
+# The topic sits outside the form so subtopic/style choices update immediately.
+st.markdown("### Build your own path")
+st.caption("Choose your preferences to build a curated reading path. No API key needed.")
+builder_category = st.selectbox(
+    "Topic", get_unique_values(st.session_state.books_df, "category"),
+    format_func=str.title, key="builder_category",
+)
+topic_books = st.session_state.books_df[
+    st.session_state.books_df["category"] == builder_category
+]
+with st.form("path_builder"):
+    builder_level = st.selectbox(
+        "Experience", ["beginner", "intermediate", "advanced"],
+        format_func=str.title, key="builder_level",
+    )
+    builder_depth = st.selectbox(
+        "Depth", ["short", "deep"],
+        format_func=lambda value: "Short path (3 books)" if value == "short" else "Deep dive (5–7 books)",
+        key="builder_depth",
+    )
+    builder_subcategory = st.selectbox(
+        "Subtopic (optional)", [None] + get_unique_values(topic_books, "subcategory"),
+        format_func=lambda value: "Any subtopic" if value is None else value.replace("-", " ").title(),
+        key=f"builder_subcategory_{builder_category}",
+    )
+    builder_style = st.selectbox(
+        "Reading style (optional)", [None] + get_unique_values(topic_books, "style"),
+        format_func=lambda value: "Any style" if value is None else value.title(),
+        key=f"builder_style_{builder_category}",
+    )
+    build_requested = st.form_submit_button("Build my path")
+
+if build_requested:
+    result = execute_recommendation(st.session_state.books_df, {
+        "category": builder_category,
+        "subcategory": builder_subcategory,
+        "level": builder_level,
+        "depth": builder_depth,
+        "style": builder_style,
+    })
+    if result.path.empty:
+        st.warning("No books match this topic and experience level. Try another level or topic. Your current path is still available below.")
+    else:
+        goal = f"Learn {builder_subcategory or builder_category} at {builder_level} level with a {builder_depth} reading path."
+        if builder_style:
+            goal += f" Preferred reading style: {builder_style}."
+        st.session_state.current_path_data = {
+            "title": f"{(builder_subcategory or builder_category).replace('-', ' ').title()} Reading Path",
+            "category": result.category,
+            "subcategory": result.subcategory,
+            "level": result.level,
+            "style": result.style,
+            "depth": result.depth,
+            "user_query": goal,
+            "books": result.path.to_dict("records"),
+            "rationale": f"Requested goal: {goal} This path uses matching books from the curated library, sequenced by the recommendation engine. Any adjustments to your preferences are listed with the path.",
+            "rationale_source": "criteria",
+            "rationale_stale": False,
+            "notices": list(result.notices),
+            "hint": get_hint_for_category(result.category),
+        }
+        st.session_state.messages = [{
+            "role": "assistant",
+            "content": f"Your reading goal: {goal} Your current books, in order, are: "
+            + "; ".join(book["title"] for book in st.session_state.current_path_data["books"])
+            + ". You can edit and download this path, or optionally customize it with the AI librarian.",
+        }]
+        st.rerun()
 
 # Display Chat History
 for msg in st.session_state.messages:
@@ -330,7 +402,7 @@ if st.session_state.current_path_data:
 
 # Initial Greeting
 if not st.session_state.messages:
-    intro_msg = "Hello! I'm your librarian. Explore a ready-made path above, or add an API key in the sidebar and tell me what you want to learn."
+    intro_msg = "Hello! I'm your librarian. Explore a ready-made path or build your own above. Add an API key for optional chat and AI explanations."
     st.session_state.messages.append({"role": "assistant", "content": intro_msg})
     st.rerun()
 
@@ -352,7 +424,7 @@ if st.session_state.current_path_data:
 
 # Handle User Input
 if not client:
-    st.info("Add an OpenAI API key in the sidebar to chat with the librarian. Starter paths and manual edits are ready to use.")
+    st.info("Add an OpenAI API key in the sidebar to chat with the librarian. Building paths, manual edits, and downloads work without a key.")
 if prompt := st.chat_input("What do you want to learn or change about this path?", disabled=client is None):
     # 1. Add User Message
     st.session_state.messages.append({"role": "user", "content": prompt})
