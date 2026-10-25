@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import graphviz
+from html import escape
 from openai import OpenAI
 from src.books import load_books, get_hint_for_category, get_purchase_url, get_unique_values, DataLoadingError
 from src.exports import build_markdown_export, build_pdf_export
@@ -166,28 +167,51 @@ def render_books(path, category):
         with st.expander("🗺️ View Learning Map", expanded=True):
             st.graphviz_chart(roadmap)
     
+    st.caption("Ratings use a 1–5 scale. Higher difficulty means more challenging; higher readability means easier to read.")
+
     for i, (idx, book) in enumerate(path.iterrows(), 1):
         with st.container(border=True):
-            col0, col1, col2 = st.columns([1, 3, 1])
+            cover_column, details_column = st.columns([1, 4])
             
-            with col0:
+            with cover_column:
                 cover_url = fetch_book_cover(book['title'], book['author'])
+                cover_frame_style = (
+                    "width:112px;max-width:100%;aspect-ratio:2/3;"
+                    "display:flex;align-items:center;justify-content:center;"
+                    "background:var(--secondary-background-color);"
+                    "border:1px solid rgba(128,128,128,0.25);border-radius:6px;"
+                    "overflow:hidden;"
+                )
                 if cover_url:
-                    st.image(cover_url, use_container_width=True)
+                    st.html(
+                        f'<div style="{cover_frame_style}">'
+                        f'<img src="{escape(str(cover_url), quote=True)}" '
+                        f'alt="{escape(str(book["title"]), quote=True)} cover" '
+                        'loading="lazy" style="width:100%;height:100%;object-fit:contain;">'
+                        '</div>'
+                    )
                 else:
-                    st.markdown("📚") # Placeholder icon
+                    st.html(
+                        f'<div style="{cover_frame_style}">'
+                        '<div style="text-align:center;padding:12px;font-size:0.8rem;">'
+                        '<span aria-hidden="true" style="font-size:2rem;">📚</span>'
+                        '<br>Cover unavailable</div></div>'
+                    )
 
-            with col1:
-                st.markdown(f"**Step {i}: {book['title']}**")
-                st.markdown(f"*by {book['author']}*")
+            with details_column:
+                st.html(
+                    f'<p style="margin:0 0 4px;font-size:0.8rem;font-weight:600;">STEP {i}</p>'
+                    f'<h3 style="margin:0 0 6px;padding:0;font-size:1.25rem;line-height:1.35;">'
+                    f'{escape(str(book["title"]))}</h3>'
+                    f'<p style="margin:0 0 12px;font-size:0.95rem;">by {escape(str(book["author"]))}</p>'
+                )
+
+                st.write(book['short_description'])
                 
-                # Metadata Visuals
                 diff = int(book.get('difficulty', 1))
                 read = int(book.get('readability', 1))
-                st.caption(f"Difficulty: {'🌶️' * diff} | Readability: {'📖' * read}")
+                st.caption(f"Difficulty: **{diff}/5** · Readability: **{read}/5**")
                 
-                st.caption(book['short_description'])
-            with col2:
                 purchase_url = get_purchase_url(book)
                 if purchase_url:
                     st.link_button("Buy Book", purchase_url)
