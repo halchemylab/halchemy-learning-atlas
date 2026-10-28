@@ -1,9 +1,24 @@
 """Session-local path revisions shared by buttons and conversational actions."""
 
 from copy import deepcopy
+import json
+import math
 
 
 MAX_REVISIONS = 20
+
+
+def json_text(value):
+    """Encode catalog NaNs as null in workspace snapshots and tool results."""
+    def clean(item):
+        if isinstance(item, dict):
+            return {key: clean(val) for key, val in item.items()}
+        if isinstance(item, (list, tuple)):
+            return [clean(val) for val in item]
+        if isinstance(item, float) and not math.isfinite(item):
+            return None
+        return item
+    return json.dumps(clean(value), ensure_ascii=False, allow_nan=False)
 
 
 def describe_changes(previous, current):
