@@ -23,6 +23,24 @@ def answer(text):
 
 
 class TestChatWorkspace(unittest.TestCase):
+    def test_restore_saved_session_without_key_preserves_undo(self):
+        from io import BytesIO
+        from src.saved_sessions import export_session
+        self.app.button(key="starter_python").click().run()
+        self.app.button(key="move_down_0_4").click().run()
+        saved = export_session({key: self.app.session_state[key] for key in
+                                ("current_path_data", "messages", "path_history")})
+        with patch.dict(os.environ, {"OPENAI_API_KEY": ""}), patch("streamlit.file_uploader", return_value=BytesIO(saved)):
+            resumed = AppTest.from_file("app.py").run()
+            next(b for b in resumed.button if b.label == "Restore session").click().run()
+            self.assertEqual(len(resumed.exception), 0)
+            self.assertEqual([b["id"] for b in resumed.session_state["current_path_data"]["books"]], [5, 4, 6])
+            self.assertEqual(resumed.session_state["messages"], self.app.session_state["messages"])
+            self.assertTrue(resumed.chat_input[0].disabled)
+            resumed.button(key="undo_path").click().run()
+            self.assertEqual([b["id"] for b in resumed.session_state["current_path_data"]["books"]], [4, 5, 6])
+            self.completion.assert_not_called()
+
     def setUp(self):
         self.completion = Mock()
         self.stats = Mock()
@@ -62,7 +80,7 @@ class TestChatWorkspace(unittest.TestCase):
         self.assertNotIn("### 3. Fluent Python", export)
         self.assertIn("### 1. Automate the Boring Stuff", export)
         self.assertTrue(any("Removed Fluent Python" in item.value for item in self.app.markdown))
-        self.assertEqual(len(self.app.get("download_button")), 2)
+        self.assertEqual(len(self.app.get("download_button")), 3)
         self.assertTrue(any(item.label == "What changed" for item in self.app.expander))
         self.send("Undo that", [action("undo_path_change", {}), answer("Restored the previous three books.")])
         self.assertEqual(self.app.session_state["current_path_data"], manually_edited)
@@ -109,7 +127,7 @@ class TestChatWorkspace(unittest.TestCase):
         ])
         self.assertEqual(self.app.session_state["current_path_data"], before)
         self.assertEqual(len(self.app.session_state["path_history"]), 1)
-        self.assertEqual(len(self.app.get("download_button")), 2)
+        self.assertEqual(len(self.app.get("download_button")), 3)
 
     def test_undo_button_works_without_an_api_key(self):
         with patch.dict(os.environ, {"OPENAI_API_KEY": ""}):

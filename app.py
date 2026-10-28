@@ -21,6 +21,7 @@ from src.roi import load_stats, increment_stats
 from src.utils import fetch_book_covers
 from src.starter_paths import STARTER_PATHS, build_starter_path
 from src.workspace import commit_path, edit_books, undo_path
+from src.saved_sessions import export_session, import_session
 
 
 logger = logging.getLogger(__name__)
@@ -113,6 +114,19 @@ except DataLoadingError as e:
 
 if "current_path_data" not in st.session_state:
     st.session_state.current_path_data = None
+
+with st.sidebar.expander("Resume a saved session"):
+    st.caption("Upload a session JSON to restore its path, conversation, and undo history. Restoring replaces this session.")
+    saved_upload = st.file_uploader("Saved session (.json)", type=["json"], key="saved_session_upload")
+    if st.button("Restore session", disabled=saved_upload is None):
+        try:
+            restored = import_session(saved_upload.getvalue(), st.session_state.books_df)
+        except ValueError as exc:
+            st.error(str(exc))
+        else:
+            for key, value in restored.items():
+                st.session_state[key] = value
+            st.rerun()
 
 # --- Helper Functions ---
 @st.cache_data(show_spinner=False)
@@ -484,6 +498,16 @@ if st.session_state.current_path_data:
     st.sidebar.header("📥 Export")
     
     data = st.session_state.current_path_data
+    try:
+        saved_content = export_session(st.session_state)
+    except ValueError as exc:
+        st.sidebar.warning(str(exc))
+    else:
+        st.sidebar.download_button(
+            "Save session (.json)", data=saved_content,
+            file_name=f"halchemy_session_{data['category']}.json", mime="application/json",
+        )
+        st.sidebar.caption("Keep this file to resume your path, chat, and undo history later. It contains no API key.")
     markdown_content = build_markdown_export(data)
     
     st.sidebar.download_button(

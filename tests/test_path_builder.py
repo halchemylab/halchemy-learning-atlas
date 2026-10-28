@@ -64,7 +64,7 @@ class TestPathBuilder(unittest.TestCase):
         self.assertTrue(all(book["is_beginner_friendly"] for book in data["books"]))
         self.assertTrue(any("preferred style" in notice for notice in data["notices"]))
         self.assertTrue(any("expected minimum of 5" in notice for notice in data["notices"]))
-        self.assertEqual(len(app.get("download_button")), 2)
+        self.assertEqual(len(app.get("download_button")), 3)
         self.assertIn(data["books"][0]["title"], build_markdown_export(data))
         self.assertTrue(build_pdf_export(data).startswith(b"%PDF"))
         self.assertTrue(app.chat_input[0].disabled)

@@ -18,6 +18,7 @@ It combines a **curated dataset** (to prevent AI hallucinations) with a **determ
 - **Path Editing:** Reorder, remove, or replace books after a path is generated.
 - **Edit by Chat:** Keep selected books, replace steps, reorder, shorten, or expand your current path by describing the change. Chat receives the live path, including manual edits, and selects real books from the curated catalog.
 - **Shared Undo:** Chat and manual controls share up to 20 session-local revisions. Say “undo that” or click “Undo last change” to restore the previous path, goal, and explanation. The “What changed” view shows actual additions, removals, and moves.
+- **Save and Resume:** Download a session JSON with your path, learning goal, conversation, and undo history. Restore it from the sidebar in a later session without an API key.
 - **Multiple Exports:** Download your curated curriculum as a clean Markdown file or a professional PDF.
 - **Library Stats:** Track your learning ROI with metrics on generated paths and recommended books.
 - **Purchase Links:** Integrated links for direct purchasing when available.
@@ -80,7 +81,7 @@ Open a starter path or describe a learning goal in chat. The conversation and wo
 
 Chat searches for candidates before adding new books, validates catalog IDs, and applies one complete change per turn. Questions such as “Why this order?” can be answered without editing. A short explanation follows the actual tool result. If an explanation request fails after a successful edit, the edit is retained and can still be undone.
 
-The current path and revision history live in the Streamlit session; they are not saved across sessions. Download Markdown or PDF to keep a copy. Chat requires an API key; manual editing, undo, and exports do not. Time budgets can be retained in your learning goal, but the catalog has no reading-duration data and the app does not generate a weekly schedule.
+The current path and revision history live in the Streamlit session. Choose **Save session (.json)** in the sidebar to keep a resumable copy of your path, goal, conversation, and up to 20 undo revisions. In a later session, open **Resume a saved session**, upload that JSON, and click **Restore session**. Restoring replaces the current session and requires no API key. Saved files contain your conversation, but no API credentials. Files are limited to 2 MB; books must still exist in the current catalog. Markdown and PDF downloads are readable curriculum copies and include your goal and recommendation warnings. Chat requires an API key; manual editing, undo, and exports do not. Time budgets can be retained in your learning goal, but the catalog has no reading-duration data and the app does not generate a weekly schedule.
 
 ## 🧠 How It Works
 

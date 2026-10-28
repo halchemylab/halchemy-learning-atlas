@@ -34,7 +34,7 @@ class TestStarterPaths(unittest.TestCase):
                 self.assertEqual(len(app.exception), 0)
                 data = app.session_state["current_path_data"]
                 self.assertEqual(tuple(book["id"] for book in data["books"]), starter["book_ids"])
-                self.assertEqual(len(app.get("download_button")), 2)
+                self.assertEqual(len(app.get("download_button")), 3)
                 self.assertTrue(app.chat_input[0].disabled)
         self.client.assert_not_called()
 
