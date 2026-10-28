@@ -291,16 +291,20 @@ def render_path_editor(data):
         if st.button(explanation_label, disabled=client is None):
             with st.spinner("Refreshing rationale..."):
                 data = deepcopy(data)
-                data["rationale"] = get_sequence_rationale(
-                    client,
-                    data.get("user_query", "this learning goal"),
-                    data["books"],
-                    model=st.session_state.model,
-                )
-                data["rationale_stale"] = False
-                data["rationale_source"] = "ai"
-                commit_path(st.session_state, data, "Refreshed the path explanation.")
-                st.rerun()
+                try:
+                    data["rationale"] = get_sequence_rationale(
+                        client,
+                        data.get("user_query", "this learning goal"),
+                        data["books"],
+                        model=st.session_state.model,
+                    )
+                except LLMClientError as exc:
+                    st.warning(exc.user_message)
+                else:
+                    data["rationale_stale"] = False
+                    data["rationale_source"] = "ai"
+                    commit_path(st.session_state, data, "Refreshed the path explanation.")
+                    st.rerun()
 
 
 # --- Chat Interface ---

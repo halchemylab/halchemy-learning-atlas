@@ -9,9 +9,28 @@ from streamlit.testing.v1 import AppTest
 from src.books import load_books
 from src.exports import build_markdown_export, build_pdf_export
 from src.recommendations import execute_recommendation
+from src.llm_client import LLMClientError
 
 
 class TestPathBuilder(unittest.TestCase):
+    def test_failed_explanation_preserves_path_and_allows_retry(self):
+        app = AppTest.from_file("app.py").run()
+        app.button(key="starter_habits").click().run()
+        book_id = app.session_state["current_path_data"]["books"][0]["id"]
+        app.button(key=f"move_down_0_{book_id}").click().run()
+        app.text_input[0].set_value("test-key").run()
+        from copy import deepcopy
+        previous = deepcopy(app.session_state["current_path_data"])
+        history = deepcopy(app.session_state["path_history"])
+        self.rationale.side_effect = LLMClientError("Please retry.")
+        next(b for b in app.button if b.label == "Refresh rationale").click().run()
+        self.assertEqual(len(app.exception), 0)
+        self.assertEqual(app.session_state["current_path_data"], previous)
+        self.assertEqual(app.session_state["path_history"], history)
+        self.rationale.side_effect = None
+        next(b for b in app.button if b.label == "Refresh rationale").click().run()
+        self.assertEqual(app.session_state["current_path_data"]["rationale_source"], "ai")
+
     def setUp(self):
         self.stats = Mock()
         self.client = Mock()

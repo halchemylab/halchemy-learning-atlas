@@ -197,7 +197,10 @@ def get_sequence_rationale(
             ],
             temperature=0.7
         )
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        if not content or not content.strip():
+            raise LLMClientError("The explanation was empty. Please try again.")
+        return content
     except OpenAIError as exc:
         logger.warning("OpenAI rationale generation failed: %s", exc, exc_info=True)
-        return "I couldn't generate a rationale right now, but your reading path is still ready."
+        raise LLMClientError(_message_for_openai_error(exc)) from exc
