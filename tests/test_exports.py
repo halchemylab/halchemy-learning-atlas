@@ -6,6 +6,22 @@ from src.exports import build_markdown_export, build_pdf_export
 
 
 class TestExports(unittest.TestCase):
+    def test_goal_and_generation_notices_survive_both_exports(self):
+        from io import BytesIO
+        from pypdf import PdfReader
+        data = {
+            "category": "coding", "level": "beginner", "books": [],
+            "rationale": "Original explanation.", "hint": "Practice.",
+            "user_query": "Learn Python at two hours per week.",
+            "notices": ["Only two matching books are available.", "Including other styles."],
+            "rationale_stale": True,
+        }
+        markdown = build_markdown_export(data)
+        pdf_text = "\n".join(page.extract_text() for page in PdfReader(BytesIO(build_pdf_export(data))).pages)
+        for expected in [data["user_query"], *data["notices"], "predates your edits"]:
+            self.assertIn(expected, markdown)
+            self.assertIn(expected, pdf_text)
+
     def test_pdf_cache_reuses_equal_paths_and_invalidates_after_edits(self):
         build_pdf_export.clear()
         self.addCleanup(build_pdf_export.clear)

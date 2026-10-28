@@ -254,6 +254,13 @@ def generate_pdf(path_data):
     pdf.rect(0, 50, pdf.w, pdf.h - 50, style="F")
 
     _add_hero(pdf, path_data)
+    _add_info_card(pdf, "Your Goal", path_data.get("user_query", ""))
+    if path_data.get("notices"):
+        _add_info_card(
+            pdf, "When This Path Was Generated",
+            "\n\n".join(path_data["notices"]),
+            fill_color=(255, 247, 225), accent_color=(168, 109, 20),
+        )
     if path_data.get("rationale_stale"):
         _add_info_card(
             pdf, "Explanation needs updating",
