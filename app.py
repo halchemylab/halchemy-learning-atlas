@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import graphviz
+from copy import deepcopy
 from html import escape
 from openai import OpenAI
 from src.books import load_books, get_hint_for_category, get_purchase_url, get_unique_values, DataLoadingError
@@ -19,6 +20,7 @@ from src.recommendations import execute_recommendation
 from src.roi import load_stats, increment_stats
 from src.utils import fetch_book_cover
 from src.starter_paths import STARTER_PATHS, build_starter_path
+from src.workspace import commit_path, edit_books, undo_path
 
 
 logger = logging.getLogger(__name__)
@@ -119,9 +121,8 @@ def books_to_dataframe(books):
     return pd.DataFrame(books)
 
 def update_current_path_books(books):
-    """Persists edited books and marks the AI rationale as stale."""
-    st.session_state.current_path_data["books"] = books
-    st.session_state.current_path_data["rationale_stale"] = True
+    """Persist manual edits with a reversible snapshot."""
+    edit_books(st.session_state, books)
 
 def render_roadmap(path):
     """Generates a Graphviz visualization of the learning path."""
@@ -289,6 +290,7 @@ def render_path_editor(data):
         explanation_label = "Refresh rationale" if data.get("rationale_stale") else "Explain this path with AI"
         if st.button(explanation_label, disabled=client is None):
             with st.spinner("Refreshing rationale..."):
+                data = deepcopy(data)
                 data["rationale"] = get_sequence_rationale(
                     client,
                     data.get("user_query", "this learning goal"),
@@ -297,7 +299,7 @@ def render_path_editor(data):
                 )
                 data["rationale_stale"] = False
                 data["rationale_source"] = "ai"
-                st.session_state.current_path_data = data
+                commit_path(st.session_state, data, "Refreshed the path explanation.")
                 st.rerun()
 
 
@@ -313,9 +315,10 @@ for column, starter in zip(st.columns(3), STARTER_PATHS):
             st.caption(f"{starter['audience']} · {len(starter['book_ids'])} books")
             st.write(starter["goal"])
             if st.button("Explore this path", key=f"starter_{starter['id']}"):
-                st.session_state.current_path_data = build_starter_path(
+                new_path = build_starter_path(
                     st.session_state.books_df, starter["id"]
                 )
+                commit_path(st.session_state, new_path, f"Opened {starter['title']}.")
                 # Keep the AI conversation aligned with the newly selected path.
                 st.session_state.messages = [{
                     "role": "assistant",
@@ -372,7 +375,7 @@ if build_requested:
         goal = f"Learn {builder_subcategory or builder_category} at {builder_level} level with a {builder_depth} reading path."
         if builder_style:
             goal += f" Preferred reading style: {builder_style}."
-        st.session_state.current_path_data = {
+        new_path = {
             "title": f"{(builder_subcategory or builder_category).replace('-', ' ').title()} Reading Path",
             "category": result.category,
             "subcategory": result.subcategory,
@@ -387,6 +390,7 @@ if build_requested:
             "notices": list(result.notices),
             "hint": get_hint_for_category(result.category),
         }
+        commit_path(st.session_state, new_path, "Built a reading path.")
         st.session_state.messages = [{
             "role": "assistant",
             "content": f"Your reading goal: {goal} Your current books, in order, are: "
@@ -431,6 +435,17 @@ if not st.session_state.messages:
     st.rerun()
 
 # Current editable path
+if st.session_state.get("last_path_change"):
+    change = st.session_state.last_path_change
+    st.success(change["summary"])
+    with st.expander("What changed", expanded=False):
+        for detail in change["details"]:
+            st.write(detail)
+if st.session_state.get("path_history"):
+    if st.button("Undo last change", key="undo_path"):
+        undo_path(st.session_state)
+        st.rerun()
+
 if st.session_state.current_path_data:
     current_data = st.session_state.current_path_data
     if current_data.get("title"):
@@ -518,7 +533,7 @@ if prompt := st.chat_input("What do you want to learn or change about this path?
                             st.info(f"🤔 **Why this path?**\n\n{rationale_text}")
 
                         # Save to session state for export
-                        st.session_state.current_path_data = {
+                        new_path = {
                             "category": category,
                             "subcategory": args.get("subcategory"),
                             "level": level,
@@ -531,6 +546,7 @@ if prompt := st.chat_input("What do you want to learn or change about this path?
                             "notices": list(result.notices),
                             "hint": hint_text
                         }
+                        commit_path(st.session_state, new_path, "Generated a reading path in chat.")
                     else:
                         no_results_msg = (
                             "I couldn't find enough books matching those exact criteria. "
