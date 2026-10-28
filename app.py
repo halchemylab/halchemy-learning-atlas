@@ -18,7 +18,7 @@ from src.conversation import run_chat_turn
 from src.path_editor import get_replacement_candidates, move_book, remove_book, replace_book
 from src.recommendations import execute_recommendation
 from src.roi import load_stats, increment_stats
-from src.utils import fetch_book_cover
+from src.utils import fetch_book_covers
 from src.starter_paths import STARTER_PATHS, build_starter_path
 from src.workspace import commit_path, edit_books, undo_path
 
@@ -170,34 +170,15 @@ def render_books(path, category):
     
     st.caption("Ratings use a 1–5 scale. Higher difficulty means more challenging; higher readability means easier to read.")
 
+    cover_slots = []
     for i, (idx, book) in enumerate(path.iterrows(), 1):
         with st.container(border=True):
             cover_column, details_column = st.columns([1, 4])
             
             with cover_column:
-                cover_url = fetch_book_cover(book['title'], book['author'])
-                cover_frame_style = (
-                    "width:112px;max-width:100%;aspect-ratio:2/3;"
-                    "display:flex;align-items:center;justify-content:center;"
-                    "background:var(--secondary-background-color);"
-                    "border:1px solid rgba(128,128,128,0.25);border-radius:6px;"
-                    "overflow:hidden;"
-                )
-                if cover_url:
-                    st.html(
-                        f'<div style="{cover_frame_style}">'
-                        f'<img src="{escape(str(cover_url), quote=True)}" '
-                        f'alt="{escape(str(book["title"]), quote=True)} cover" '
-                        'loading="lazy" style="width:100%;height:100%;object-fit:contain;">'
-                        '</div>'
-                    )
-                else:
-                    st.html(
-                        f'<div style="{cover_frame_style}">'
-                        '<div style="text-align:center;padding:12px;font-size:0.8rem;">'
-                        '<span aria-hidden="true" style="font-size:2rem;">📚</span>'
-                        '<br>Cover unavailable</div></div>'
-                    )
+                slot = st.empty()
+                slot.caption("📚 Loading cover…")
+                cover_slots.append((slot, book))
 
             with details_column:
                 st.html(
@@ -223,6 +204,24 @@ def render_books(path, category):
     st.markdown("---")
     hint_text = get_hint_for_category(category)
     st.info(f"💡 **Hint for learning {category.capitalize()}:**\n\n{hint_text}")
+    # Render the complete path before waiting for optional cover requests.
+    covers = fetch_book_covers(tuple((str(book["title"]), str(book["author"])) for _, book in cover_slots))
+    for (slot, book), cover_url in zip(cover_slots, covers):
+        frame_style = (
+            "width:112px;max-width:100%;aspect-ratio:2/3;"
+            "display:flex;align-items:center;justify-content:center;"
+            "background:var(--secondary-background-color);"
+            "border:1px solid rgba(128,128,128,0.25);border-radius:6px;overflow:hidden;"
+        )
+        if cover_url:
+            body = (
+                f'<img src="{escape(str(cover_url), quote=True)}" '
+                f'alt="{escape(str(book["title"]), quote=True)} cover" '
+                'loading="lazy" style="width:100%;height:100%;object-fit:contain;">'
+            )
+        else:
+            body = '<div style="text-align:center;padding:12px;">📚<br>Cover unavailable</div>'
+        slot.html(f'<div style="{frame_style}">{body}</div>')
     return hint_text
 
 def render_path_editor(data):

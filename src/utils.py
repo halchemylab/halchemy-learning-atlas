@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 import streamlit as st
@@ -6,7 +7,6 @@ import streamlit as st
 
 logger = logging.getLogger(__name__)
 
-@st.cache_data(show_spinner=False, ttl=3600)
 def fetch_book_cover(title, author):
     """
     Fetches the book cover image URL from Google Books API.
@@ -40,3 +40,13 @@ def fetch_book_cover(title, author):
     # Return None or a specific placeholder URL if you have one
     # For now, we'll return None and handle it in the UI
     return None
+
+
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=128)
+def fetch_book_covers(books):
+    """Fetch a path's covers concurrently without Streamlit calls in workers."""
+    if not books:
+        return []
+    with ThreadPoolExecutor(max_workers=min(12, len(books))) as executor:
+        futures = [executor.submit(fetch_book_cover, title, author) for title, author in books]
+        return [future.result() for future in futures]
