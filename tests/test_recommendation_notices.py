@@ -86,8 +86,8 @@ class TestRecommendationNotices(unittest.TestCase):
     def test_combined_notices_survive_app_rerun(self):
         args = {"category": "coding", "subcategory": "rust", "style": "academic", "depth": "deep"}
         books = self.books.iloc[:4]
-        response = SimpleNamespace(tool_calls=[SimpleNamespace(
-            function=SimpleNamespace(arguments=json.dumps(args))
+        response = SimpleNamespace(content=None, tool_calls=[SimpleNamespace(
+            id="call_query", function=SimpleNamespace(name="query_library", arguments=json.dumps(args))
         )])
         with (
             patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}),
@@ -96,7 +96,10 @@ class TestRecommendationNotices(unittest.TestCase):
             patch("src.books.load_books", return_value=books),
             patch("src.utils.fetch_book_cover", return_value=None),
             patch("src.roi.load_stats", return_value={}),
-            patch("src.llm_client.get_chat_completion", return_value=response),
+            patch("src.roi.increment_stats"),
+            patch("src.llm_client.get_chat_completion", side_effect=[
+                response, SimpleNamespace(content="Built your path with broader matches.", tool_calls=None),
+            ]),
             patch("src.llm_client.get_sequence_rationale", return_value="Start with the basics."),
             patch("src.exports.build_pdf_export", return_value=b"pdf"),
             patch("src.recommendations.execute_recommendation", side_effect=lambda df, args: execute_recommendation(

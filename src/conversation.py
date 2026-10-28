@@ -137,6 +137,7 @@ def run_chat_turn(client, messages, state, books_df, model="gpt-4o-mini", temper
                 for message in messages if message.get("content") and message["role"] in {"user", "assistant"}]
     user_query = next((message["content"] for message in reversed(exchange) if message["role"] == "user"), "")
     changed = False
+    action = None
     last_error = None
     for round_index in range(MAX_TOOL_ROUNDS + 1):
         final = changed or round_index == MAX_TOOL_ROUNDS
@@ -149,12 +150,12 @@ def run_chat_turn(client, messages, state, books_df, model="gpt-4o-mini", temper
             if not changed:
                 raise
             # The edit succeeded; an explanation outage must not lose it or invite a retry.
-            return _publish(state, draft, "Your path was updated. The explanation is unavailable right now; see What changed.")
+            return _publish(state, draft, "Your path was updated. The explanation is unavailable right now; see What changed.", action)
         calls = response.tool_calls or []
         if not calls:
             text = response.content or last_error or "Tell me what you'd like to learn or change."
             if changed:
-                return _publish(state, draft, text)
+                return _publish(state, draft, text, action)
             return {"message": text, "changed": False}
         if final:
             break
@@ -171,17 +172,19 @@ def run_chat_turn(client, messages, state, books_df, model="gpt-4o-mini", temper
                     call.function.name, json.loads(call.function.arguments), draft, books_df, user_query,
                 )
                 changed = changed or did_change
+                if did_change:
+                    action = call.function.name
             except (ValueError, TypeError) as exc:
                 last_error = str(exc)
                 output = {"error": last_error, "changed": False}
             exchange.append({"role": "tool", "tool_call_id": call.id, "content": json_text(output)})
     if changed:
-        return _publish(state, draft, "Updated your path. See What changed for the details.")
+        return _publish(state, draft, "Updated your path. See What changed for the details.", action)
     return {"message": last_error or "I couldn't complete that request. Try a more specific change. Your path is unchanged.",
             "changed": False}
 
 
-def _publish(state, draft, message):
+def _publish(state, draft, message, action):
     for key, value in draft.items():
         state[key] = value
-    return {"message": message, "changed": True}
+    return {"message": message, "changed": True, "action": action}

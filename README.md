@@ -16,6 +16,8 @@ It combines a **curated dataset** (to prevent AI hallucinations) with a **determ
 - **Transparent Recommendations:** Notices explain when a subtopic is broadened, a style preference is relaxed, or fewer books are available than the requested path's minimum (3 for short, 5 for deep).
 - **Expert Rationales:** AI-generated explanations of *why* each book was chosen for your specific path.
 - **Path Editing:** Reorder, remove, or replace books after a path is generated.
+- **Edit by Chat:** Keep selected books, replace steps, reorder, shorten, or expand your current path by describing the change. Chat receives the live path, including manual edits, and selects real books from the curated catalog.
+- **Shared Undo:** Chat and manual controls share up to 20 session-local revisions. Say “undo that” or click “Undo last change” to restore the previous path, goal, and explanation. The “What changed” view shows actual additions, removals, and moves.
 - **Multiple Exports:** Download your curated curriculum as a clean Markdown file or a professional PDF.
 - **Library Stats:** Track your learning ROI with metrics on generated paths and recommended books.
 - **Purchase Links:** Integrated links for direct purchasing when available.
@@ -67,14 +69,28 @@ streamlit run app.py
 
 The app will open in your default web browser at `http://localhost:8501`.
 
+### Talk your plan into shape
+
+Open a starter path or describe a learning goal in chat. The conversation and working path appear side by side. Try:
+
+- “Move the second book first.”
+- “Keep the first book, but make the rest more practical.”
+- “Shorten this to two books. I have two hours a week.”
+- “Undo that.”
+
+Chat searches for candidates before adding new books, validates catalog IDs, and applies one complete change per turn. Questions such as “Why this order?” can be answered without editing. A short explanation follows the actual tool result. If an explanation request fails after a successful edit, the edit is retained and can still be undone.
+
+The current path and revision history live in the Streamlit session; they are not saved across sessions. Download Markdown or PDF to keep a copy. Chat requires an API key; manual editing, undo, and exports do not. Time budgets can be retained in your learning goal, but the catalog has no reading-duration data and the app does not generate a weekly schedule.
+
 ## 🧠 How It Works
 
 The system uses a **Hybrid Architecture**:
 
-1.  **Conversation:** An LLM processes your intent and extracts parameters (Topic, Level, Style, Depth).
+1.  **Conversation:** An LLM receives your messages and a fresh snapshot of the current path, goal, and undo availability.
 2.  **Filtering:** The engine queries `data/books.csv` to find matches from a curated source.
 3.  **Sequencing:** A Python-based sorter orders the books based on the learning type (Procedural, History, or Behavioral).
-4.  **Rationale & Hints:** The LLM analyzes the selected books to provide a custom rationale and domain-specific advice.
+4.  **Actions:** A bounded tool loop searches the catalog, builds a new path, applies an ordered list of verified book IDs, or undoes the last change. Tool results are returned to the model before it explains the outcome, following the [OpenAI function-calling protocol](https://developers.openai.com/api/docs/guides/function-calling).
+5.  **Shared Workspace:** Chat and manual edits use the same revision functions. Existing explanations are marked stale after edits and can be refreshed separately.
 
 ## 🧪 Testing
 
@@ -97,13 +113,15 @@ CI runs the same command on Python 3.11, 3.12, and 3.13 using the pinned depende
 │   └── roi_stats.json     # Runtime metrics file, generated locally
 ├── src/
 │   ├── books.py           # Filtering and sequencing logic
+│   ├── conversation.py    # Validated chat actions and bounded tool loop
 │   ├── exports.py         # Markdown and PDF export helpers
 │   ├── llm_client.py      # OpenAI integration
 │   ├── path_editor.py     # Path editing helpers
 │   ├── pdf_gen.py         # PDF report generation logic
 │   ├── recommendations.py # Recommendation orchestration
 │   ├── roi.py             # Stats tracking and ROI logic
-│   └── utils.py           # Utility functions (e.g., cover fetching)
+│   ├── utils.py           # Utility functions (e.g., cover fetching)
+│   └── workspace.py       # Shared path snapshots, change descriptions, and undo
 ├── tests/                 # Unit and integration tests
 └── docs/
     └── book_data.md       # Guidelines for managing book metadata

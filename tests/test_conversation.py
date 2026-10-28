@@ -94,6 +94,28 @@ class TestConversation(unittest.TestCase):
         self.assertTrue(result["changed"])
         self.assertEqual(self.state["current_path_data"], original)
 
+    def test_replacement_and_expansion_use_exact_catalog_records(self):
+        original = deepcopy(self.state["current_path_data"])
+        candidates, changed = execute_tool("search_books", {"category": "coding"}, self.state, self.books, "")
+        replacement_id = next(book["id"] for book in candidates["matches"] if book["id"] not in {4, 5, 6})
+        for ids in ([4, replacement_id, 6], [4, 5, 6, replacement_id]):
+            with self.subTest(ids=ids):
+                execute_tool("edit_path", {"book_ids": ids, "reason": "Adjusted the practical reading list."},
+                             self.state, self.books, "")
+                current = self.state["current_path_data"]
+                self.assertEqual([book["id"] for book in current["books"]], ids)
+                expected = self.books.set_index("id", drop=False).loc[ids].to_dict("records")
+                self.assertEqual(current["books"], expected)
+                execute_tool("undo_path_change", {}, self.state, self.books, "")
+                self.assertEqual(self.state["current_path_data"], original)
+
+    def test_noop_edit_consumes_no_revision(self):
+        before = deepcopy(self.state)
+        output, changed = execute_tool("edit_path", {"book_ids": [4, 5, 6], "reason": "Keep this path."},
+                                       self.state, self.books, "")
+        self.assertFalse(changed)
+        self.assertEqual(self.state, before)
+
     def test_new_path_no_matches_and_empty_undo(self):
         state = {}
         output, changed = execute_tool("query_library", {"category": "coding"}, state, self.books, "Learn code")
