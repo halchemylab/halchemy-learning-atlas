@@ -309,7 +309,7 @@ def render_path_editor(data):
 
 # --- Chat Interface ---
 
-with st.expander("Start a reading path", expanded=False):
+with st.expander("Start a reading path", expanded=st.session_state.current_path_data is None):
     # Starter paths are available before any AI configuration or conversation.
     st.markdown("### Start with a ready-made path")
     st.caption("Choose a topic to explore 3–4 curated books. No API key needed.")
