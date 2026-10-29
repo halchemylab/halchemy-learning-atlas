@@ -9,6 +9,7 @@ It combines a **curated dataset** (to prevent AI hallucinations) with a **determ
 ## ✨ Key Features
 
 - **Ready-made Starter Paths:** Explore Python (3 books, with an advanced stretch goal), habits (3 books), or world history (4 books) immediately. Browse, edit, and export these curated paths without an API key.
+- **Simple First Visit:** Start with “What would you like to learn?” and three starter paths. Open **Build a custom path** for detailed preferences, or **AI settings (optional)** in the sidebar to enable chat. The conversation and working path appear side by side after you create a path.
 - **No-key Path Builder:** Choose a topic, experience level, and depth, with optional subtopic and reading style. Build paths from the curated library, edit them, and download them without an API key. AI explanations are an optional extra.
 - **AI Librarian (Chat-to-Query):** Interactive chat interface that translates your learning goals into structured queries.
 - **Visual Roadmaps:** Automatic generation of learning maps using Graphviz to visualize your progression.

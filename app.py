@@ -28,17 +28,17 @@ logger = logging.getLogger(__name__)
 
 # --- Page Config ---
 st.set_page_config(
-    page_title="Halchemy Library (AI-Powered)",
+    page_title="Halchemy Library",
     page_icon="📚",
     layout="wide"
 )
 
 # --- Setup & API Key ---
 st.title("Halchemy Library 📚")
-st.caption("Talk your learning plan into shape. Build a path, then refine it together.")
+st.caption("Build a reading path from a curated library. Start exploring for free, with no API key needed.")
 
 # --- Sidebar: ROI & Config ---
-with st.sidebar:
+with st.sidebar.expander("Library stats", expanded=False):
     # Library Stats Section
     st.header("📊 Library Stats")
     
@@ -58,11 +58,8 @@ with st.sidebar:
     # Initial render
     update_stats_display()
     
-    st.divider()
-
-    # Configuration Section
-    st.header("⚙️ Configuration")
-    
+with st.sidebar.expander("AI settings (optional)", expanded=False):
+    st.caption("Enable chat and AI explanations. You can build, edit, and export paths without these settings.")
     # Try to get key from environment or secrets first
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -322,10 +319,9 @@ def render_path_editor(data):
 
 # --- Chat Interface ---
 
-with st.expander("Start a reading path", expanded=st.session_state.current_path_data is None):
+with st.expander("What would you like to learn?", expanded=st.session_state.current_path_data is None):
     # Starter paths are available before any AI configuration or conversation.
-    st.markdown("### Start with a ready-made path")
-    st.caption("Choose a topic to explore 3–4 curated books. No API key needed.")
+    st.caption("Choose a starter path to see your first 3–4 books. You can customize it afterward.")
     for column, starter in zip(st.columns(3), STARTER_PATHS):
         with column:
             with st.container(border=True):
@@ -347,9 +343,9 @@ with st.expander("Start a reading path", expanded=st.session_state.current_path_
                     increment_stats(num_books=len(starter["book_ids"]), category=starter["category"])
                     st.rerun()
 
+with st.expander("Build a custom path", expanded=False):
     # The topic sits outside the form so subtopic/style choices update immediately.
-    st.markdown("### Build your own path")
-    st.caption("Choose your preferences to build a curated reading path. No API key needed.")
+    st.caption("Choose a topic, then adjust your experience level and reading preferences.")
     builder_category = st.selectbox(
         "Topic", get_unique_values(st.session_state.books_df, "category"),
         format_func=str.title, key="builder_category",
@@ -424,7 +420,12 @@ if not st.session_state.messages:
         "content": "What would you like to learn? Start with a path above, or tell me your goal. Once you have a path, ask me to change it.",
     })
 
-chat_column, path_column = st.columns([1, 1.3], gap="large")
+has_workspace = bool(st.session_state.current_path_data or st.session_state.get("path_history"))
+if has_workspace:
+    chat_column, path_column = st.columns([1, 1.3], gap="large")
+else:
+    chat_column = st.expander("Describe your goal with AI (optional)", expanded=False)
+    path_column = st.container()
 with chat_column:
     st.markdown("### Talk your plan into shape")
     st.caption('Try: "Keep the first book, make the rest more practical" · "Move the second book first" · "Undo that"')
@@ -461,36 +462,37 @@ with chat_column:
                 st.session_state.messages.append({"role": "assistant", "content": reply})
         st.rerun()
 
-with path_column:
-    st.markdown("### Your working path")
-    if st.session_state.get("last_path_change"):
-        change = st.session_state.last_path_change
-        st.success(change["summary"])
-        if change["details"]:
-            with st.expander("What changed", expanded=True):
-                for detail in change["details"]:
-                    st.write(detail)
-    if st.session_state.get("path_history"):
-        if st.button("Undo last change", key="undo_path"):
-            undo_path(st.session_state)
-            st.rerun()
-    st.caption("Undo keeps up to 20 changes in this session. Download your path to keep a copy.")
-    if st.session_state.current_path_data:
-        current_data = st.session_state.current_path_data
-        if current_data.get("title"):
-            st.markdown(f"## {current_data['title']}")
-        st.write(f"**Your goal:** {current_data['user_query']}")
-        current_path = books_to_dataframe(current_data["books"])
-        if current_data.get("notices"):
-            st.caption("When this path was generated:")
-            for notice in current_data["notices"]:
-                st.warning(notice)
-        render_books(current_path, current_data["category"])
-        if current_data.get("rationale") and not current_data.get("rationale_stale"):
-            st.info(f"🤔 **Why this path?**\n\n{current_data['rationale']}")
-        render_path_editor(current_data)
-    else:
-        st.info("Your reading path will appear here. Explore a starter path, build your own, or describe your goal in chat.")
+if has_workspace:
+    with path_column:
+        st.markdown("### Your working path")
+        if st.session_state.get("last_path_change"):
+            change = st.session_state.last_path_change
+            st.success(change["summary"])
+            if change["details"]:
+                with st.expander("What changed", expanded=True):
+                    for detail in change["details"]:
+                        st.write(detail)
+        if st.session_state.get("path_history"):
+            if st.button("Undo last change", key="undo_path"):
+                undo_path(st.session_state)
+                st.rerun()
+        st.caption("Undo keeps up to 20 changes in this session. Download your path to keep a copy.")
+        if st.session_state.current_path_data:
+            current_data = st.session_state.current_path_data
+            if current_data.get("title"):
+                st.markdown(f"## {current_data['title']}")
+            st.write(f"**Your goal:** {current_data['user_query']}")
+            current_path = books_to_dataframe(current_data["books"])
+            if current_data.get("notices"):
+                st.caption("When this path was generated:")
+                for notice in current_data["notices"]:
+                    st.warning(notice)
+            render_books(current_path, current_data["category"])
+            if current_data.get("rationale") and not current_data.get("rationale_stale"):
+                st.info(f"🤔 **Why this path?**\n\n{current_data['rationale']}")
+            render_path_editor(current_data)
+        else:
+            st.info("Your reading path will appear here. Explore a starter path, build your own, or describe your goal in chat.")
 
 # Export Button (Sidebar)
 if st.session_state.current_path_data:
