@@ -51,7 +51,7 @@ class TestStarterPaths(unittest.TestCase):
         self.assertEqual(len(app.exception), 0)
         self.assertFalse(app.chat_input[0].disabled)
         self.assertFalse(next(b for b in app.button if b.label == "Refresh rationale").disabled)
-        self.client.assert_called_once_with(api_key="test-key")
+        self.client.assert_called_once_with(api_key="test-key", timeout=30, max_retries=0)
 
 
 if __name__ == "__main__":

@@ -86,6 +86,22 @@ The current path and revision history live in the Streamlit session. Choose **Sa
 
 ## 🧠 How It Works
 
+### AI usage limits
+
+Long conversations keep their full visible and saved history, but each new AI turn uses only
+the most recent 8 messages, up to 12,000 characters, plus the current path and learning goal.
+Older preferences that are not in the current goal may need to be repeated. No extra API call
+is made to summarize old messages. Messages longer than 4,000 characters are rejected before
+calling the API.
+
+Chat responses are capped at 600 output tokens per call; separate path explanations at 200.
+Each chat turn allows at most 3 tool rounds plus one final response (4 API calls total).
+Requests exceeding 48,000 serialized UTF-8 bytes, including context and tool definitions,
+are stopped locally. This byte limit is not an exact token count. Requests use a 30-second
+timeout with automatic retries disabled. These limits bound usage per turn, not total
+session spending; repeatedly sending messages still incurs API charges. The constants live
+in `src/llm_client.py` and `src/conversation.py`.
+
 The system uses a **Hybrid Architecture**:
 
 1.  **Conversation:** An LLM receives your messages and a fresh snapshot of the current path, goal, and undo availability.

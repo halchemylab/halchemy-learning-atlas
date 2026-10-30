@@ -9,7 +9,7 @@ from src.recommendations import execute_recommendation
 from src.workspace import commit_path, json_text, undo_path
 
 
-MAX_TOOL_ROUNDS = 5
+MAX_TOOL_ROUNDS = 3
 MAX_PATH_BOOKS = 12
 BOOK_FIELDS = ("id", "title", "author", "category", "subcategory", "difficulty",
                "readability", "style", "short_description", "is_beginner_friendly",
@@ -133,8 +133,7 @@ def run_chat_turn(client, messages, state, books_df, model="gpt-4o-mini", temper
     draft = {key: deepcopy(state.get(key)) for key in
              ("current_path_data", "last_path_change")}
     draft["path_history"] = deepcopy(state.get("path_history", []))
-    exchange = [{"role": message["role"], "content": message["content"]}
-                for message in messages if message.get("content") and message["role"] in {"user", "assistant"}]
+    exchange = llm_client.bounded_chat_history(messages)
     user_query = next((message["content"] for message in reversed(exchange) if message["role"] == "user"), "")
     changed = False
     action = None

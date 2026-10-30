@@ -95,7 +95,7 @@ with st.sidebar.expander("AI settings (optional)", expanded=False):
     )
 
 # Initialize OpenAI Client
-client = OpenAI(api_key=api_key) if api_key else None
+client = OpenAI(api_key=api_key, timeout=30, max_retries=0) if api_key else None
 
 # --- State Management ---
 if "messages" not in st.session_state:
@@ -429,6 +429,8 @@ else:
 with chat_column:
     st.markdown("### Talk your plan into shape")
     st.caption('Try: "Keep the first book, make the rest more practical" · "Move the second book first" · "Undo that"')
+    st.caption("To keep AI costs down, chat uses only recent messages plus your current path. "
+               "Older messages stay visible; repeat older preferences if needed. Messages are limited to 4,000 characters.")
     thread = st.container(height=540, border=True)
     with thread:
         for msg in st.session_state.messages:

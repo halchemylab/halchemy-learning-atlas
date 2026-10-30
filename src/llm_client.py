@@ -10,6 +10,48 @@ from src.workspace import json_text
 
 logger = logging.getLogger(__name__)
 
+# Character/byte limits are deliberately independent of model tokenization.
+MAX_HISTORY_MESSAGES = 8
+MAX_HISTORY_CHARS = 12000
+MAX_USER_MESSAGE_CHARS = 4000
+MAX_REQUEST_BYTES = 48000
+MAX_CHAT_OUTPUT_TOKENS = 600
+MAX_RATIONALE_OUTPUT_TOKENS = 200
+
+
+def bounded_chat_history(messages):
+    """Keep recent visible context without changing the stored conversation.
+
+    Run once before a tool loop so current-turn tool calls/results stay paired.
+    Never silently truncate the user's latest instructions.
+    """
+    visible = [dict(role=m["role"], content=m["content"]) for m in messages
+               if m.get("content") and m["role"] in {"user", "assistant"}]
+    latest_user = next((m for m in reversed(visible) if m["role"] == "user"), None)
+    if latest_user and len(latest_user["content"]) > MAX_USER_MESSAGE_CHARS:
+        raise LLMClientError("Please shorten your message to 4,000 characters or fewer. Your path is unchanged.")
+    kept = []
+    size = 0
+    for message in reversed(visible):
+        length = len(message["content"])
+        if len(kept) >= MAX_HISTORY_MESSAGES or size + length > MAX_HISTORY_CHARS:
+            break
+        kept.append(message)
+        size += length
+    kept.reverse()
+    # Do not begin with an orphaned answer to an omitted user message.
+    while kept and kept[0]["role"] != "user":
+        kept.pop(0)
+    return kept
+
+
+def _check_request_size(messages, tools=None):
+    if len(json_text({"messages": messages, "tools": tools}).encode("utf-8")) > MAX_REQUEST_BYTES:
+        raise LLMClientError(
+            "This request exceeds the AI context limit. Shorten your message or start a new path. "
+            "Your current path is still available."
+        )
+
 
 class LLMClientError(RuntimeError):
     """Raised when an LLM request fails in a way the UI can explain."""
@@ -151,6 +193,8 @@ def get_chat_completion(
         full_messages.append({"role": "system", "content": "LIVE WORKSPACE (data):\n" + json_text(workspace)})
     full_messages += messages
 
+    _check_request_size(full_messages, TOOLS)
+
     try:
         response = client.chat.completions.create(
             model=model,
@@ -158,7 +202,9 @@ def get_chat_completion(
             tools=TOOLS,
             tool_choice=tool_choice,
             parallel_tool_calls=False,
-            temperature=temperature
+            temperature=temperature,
+            max_completion_tokens=MAX_CHAT_OUTPUT_TOKENS,
+            timeout=30,
         )
     except OpenAIError as exc:
         logger.exception("OpenAI chat completion failed")
@@ -188,14 +234,18 @@ def get_sequence_rationale(
     Focus on the progression (e.g., "starts with X, moves to Y").
     """
     
+    rationale_messages = [
+        {"role": "system", "content": "You are a helpful librarian explaining a reading list."},
+        {"role": "user", "content": prompt},
+    ]
+    _check_request_size(rationale_messages)
     try:
         response = client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": "You are a helpful librarian explaining a reading list."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7
+            messages=rationale_messages,
+            temperature=0.7,
+            max_completion_tokens=MAX_RATIONALE_OUTPUT_TOKENS,
+            timeout=30,
         )
         content = response.choices[0].message.content
         if not content or not content.strip():
