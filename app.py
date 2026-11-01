@@ -474,11 +474,25 @@ if has_workspace:
                 with st.expander("What changed", expanded=True):
                     for detail in change["details"]:
                         st.write(detail)
-        if st.session_state.get("path_history"):
-            if st.button("Undo last change", key="undo_path"):
-                undo_path(st.session_state)
-                st.rerun()
-        st.caption("Undo keeps up to 20 changes in this session. Download your path to keep a copy.")
+        undo_column, save_column = st.columns(2)
+        with undo_column:
+            if st.session_state.get("path_history"):
+                if st.button("Undo last change", key="undo_path"):
+                    undo_path(st.session_state)
+                    st.rerun()
+        with save_column:
+            if st.session_state.current_path_data:
+                try:
+                    saved_content = export_session(st.session_state)
+                except ValueError as exc:
+                    st.warning(str(exc))
+                else:
+                    st.download_button(
+                        "Save session (.json)", data=saved_content,
+                        file_name=f"halchemy_session_{st.session_state.current_path_data['category']}.json",
+                        mime="application/json", key="save_session",
+                    )
+        st.caption("Undo keeps up to 20 changes in this session. Save session (.json) keeps your path, chat, and undo history so you can resume later; it contains no API key. PDF and Markdown downloads in the sidebar are reading copies.")
         if st.session_state.current_path_data:
             current_data = st.session_state.current_path_data
             if current_data.get("title"):
@@ -502,16 +516,6 @@ if st.session_state.current_path_data:
     st.sidebar.header("📥 Export")
     
     data = st.session_state.current_path_data
-    try:
-        saved_content = export_session(st.session_state)
-    except ValueError as exc:
-        st.sidebar.warning(str(exc))
-    else:
-        st.sidebar.download_button(
-            "Save session (.json)", data=saved_content,
-            file_name=f"halchemy_session_{data['category']}.json", mime="application/json",
-        )
-        st.sidebar.caption("Keep this file to resume your path, chat, and undo history later. It contains no API key.")
     markdown_content = build_markdown_export(data)
     
     st.sidebar.download_button(
