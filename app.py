@@ -283,8 +283,15 @@ def render_path_editor(data):
                     key=f"replacement_{index}_{book['id']}",
                     label_visibility="collapsed",
                 )
+                replacement = replacement_candidates[selected_label]
+                st.caption("Replacement preview")
+                st.markdown(f"**{replacement['title']}** by {replacement['author']}")
+                st.write(replacement["short_description"])
+                st.caption(
+                    f"Difficulty: {int(replacement['difficulty'])}/5 · "
+                    f"Readability: {int(replacement['readability'])}/5"
+                )
                 if st.button("Replace this step", key=f"replace_{index}_{book['id']}"):
-                    replacement = replacement_candidates[selected_label]
                     update_current_path_books(replace_book(books, index, replacement))
                     st.rerun()
             else:
