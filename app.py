@@ -505,6 +505,18 @@ if has_workspace:
             if current_data.get("title"):
                 st.markdown(f"## {current_data['title']}")
             st.write(f"**Your goal:** {current_data['user_query']}")
+            preferences = [current_data["category"].replace("-", " ").title()]
+            if current_data.get("subcategory"):
+                preferences.append(current_data["subcategory"].replace("-", " ").title())
+            preferences.append(current_data["level"].title())
+            depth_label = {"short": "Short path", "deep": "Deep dive"}.get(current_data.get("depth"))
+            if depth_label:
+                preferences.append(depth_label)
+            preferences.append(
+                current_data["style"].replace("-", " ").title()
+                if current_data.get("style") else "Any reading style"
+            )
+            st.caption("Path preferences: " + " · ".join(preferences))
             current_path = books_to_dataframe(current_data["books"])
             if current_data.get("notices"):
                 st.caption("When this path was generated:")
