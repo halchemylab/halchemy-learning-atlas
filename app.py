@@ -251,6 +251,29 @@ def render_path_editor(data):
     if len(books) < 3:
         st.warning("Reading paths work best with at least 3 books.")
 
+    with st.expander("Add a book", expanded=not books):
+        if len(books) >= 12:
+            st.caption("Paths can contain up to 12 books. Remove a book before adding another.")
+        elif replacement_candidates:
+            candidates_by_id = {book["id"]: book for book in replacement_candidates}
+            selected_id = st.selectbox(
+                "Book to add", options=list(candidates_by_id),
+                format_func=lambda book_id: (
+                    f"{candidates_by_id[book_id]['title']} by {candidates_by_id[book_id]['author']}"
+                ), key="add_book_selection",
+            )
+            candidate = candidates_by_id[selected_id]
+            st.write(candidate["short_description"])
+            st.caption(
+                f"Difficulty: {int(candidate['difficulty'])}/5 · "
+                f"Readability: {int(candidate['readability'])}/5"
+            )
+            if st.button("Add to end of path", key="add_book"):
+                update_current_path_books([*books, candidate])
+                st.rerun()
+        else:
+            st.caption("No additional books match this path's preferences.")
+
     with st.expander("Reorder, remove, or replace books", expanded=False):
         for index, book in enumerate(books):
             cols = st.columns([5, 1, 1, 1])

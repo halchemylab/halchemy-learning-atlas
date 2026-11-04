@@ -13,6 +13,26 @@ from src.llm_client import LLMClientError
 
 
 class TestPathBuilder(unittest.TestCase):
+    def test_add_book_without_key_and_undo(self):
+        app = AppTest.from_file("app.py").run()
+        app.button(key="starter_python").click().run()
+        from copy import deepcopy
+        first_id = app.session_state["current_path_data"]["books"][0]["id"]
+        app.button(key=f"remove_0_{first_id}").click().run()
+        original = deepcopy(app.session_state["current_path_data"])
+        selected = app.selectbox(key="add_book_selection").value
+        app.button(key="add_book").click().run()
+        self.assertEqual(len(app.exception), 0)
+        updated = app.session_state["current_path_data"]
+        self.assertEqual(updated["books"][:-1], original["books"])
+        self.assertEqual(updated["books"][-1]["id"], selected)
+        self.assertEqual(len({b["id"] for b in updated["books"]}), len(updated["books"]))
+        self.assertTrue(updated["rationale_stale"])
+        self.assertTrue(app.chat_input[0].disabled)
+        app.button(key="undo_path").click().run()
+        self.assertEqual(app.session_state["current_path_data"], original)
+        self.client.assert_not_called()
+
     def test_failed_explanation_preserves_path_and_allows_retry(self):
         app = AppTest.from_file("app.py").run()
         app.button(key="starter_habits").click().run()
