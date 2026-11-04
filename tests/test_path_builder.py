@@ -13,6 +13,29 @@ from src.llm_client import LLMClientError
 
 
 class TestPathBuilder(unittest.TestCase):
+    def test_pdf_is_on_demand_retryable_and_invalidated_after_edit(self):
+        with patch("src.exports.build_pdf_export", side_effect=[RuntimeError("PDF failure"), b"pdf"]) as generate:
+            app = AppTest.from_file("app.py").run()
+            app.button(key="starter_python").click().run()
+            from copy import deepcopy
+            original = deepcopy(app.session_state["current_path_data"])
+            generate.assert_not_called()
+            app.button(key="prepare_pdf").click().run()
+            self.assertEqual(len(app.exception), 0)
+            self.assertEqual(app.session_state["current_path_data"], original)
+            self.assertTrue(any("PDF generation failed" in w.value for w in app.warning))
+            self.assertEqual(len(app.get("download_button")), 2)
+            app.button(key="prepare_pdf").click().run()
+            self.assertEqual(len(app.exception), 0)
+            self.assertEqual(len(app.get("download_button")), 3)
+            app.run()
+            self.assertEqual(generate.call_count, 2)
+            first_id = original["books"][0]["id"]
+            app.button(key=f"move_down_0_{first_id}").click().run()
+            self.assertEqual(len(app.get("download_button")), 2)
+            self.assertFalse(app.button(key="prepare_pdf").disabled)
+            self.assertEqual(generate.call_count, 2)
+
     def test_empty_path_offers_add_and_undo_without_no_match_warning(self):
         app = AppTest.from_file("app.py").run()
         app.button(key="starter_python").click().run()
@@ -99,7 +122,7 @@ class TestPathBuilder(unittest.TestCase):
         self.assertTrue(all(book["is_beginner_friendly"] for book in data["books"]))
         self.assertTrue(any("preferred style" in notice for notice in data["notices"]))
         self.assertTrue(any("expected minimum of 5" in notice for notice in data["notices"]))
-        self.assertEqual(len(app.get("download_button")), 3)
+        self.assertEqual(len(app.get("download_button")), 2)
         self.assertIn(data["books"][0]["title"], build_markdown_export(data))
         self.assertTrue(build_pdf_export(data).startswith(b"%PDF"))
         self.assertTrue(app.chat_input[0].disabled)

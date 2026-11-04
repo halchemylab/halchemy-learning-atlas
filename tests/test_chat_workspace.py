@@ -80,7 +80,7 @@ class TestChatWorkspace(unittest.TestCase):
         self.assertNotIn("### 3. Fluent Python", export)
         self.assertIn("### 1. Automate the Boring Stuff", export)
         self.assertTrue(any("Removed Fluent Python" in item.value for item in self.app.markdown))
-        self.assertEqual(len(self.app.get("download_button")), 3)
+        self.assertEqual(len(self.app.get("download_button")), 2)
         self.assertTrue(any(item.label == "What changed" for item in self.app.expander))
         self.send("Undo that", [action("undo_path_change", {}), answer("Restored the previous three books.")])
         self.assertEqual(self.app.session_state["current_path_data"], manually_edited)
@@ -127,7 +127,7 @@ class TestChatWorkspace(unittest.TestCase):
         ])
         self.assertEqual(self.app.session_state["current_path_data"], before)
         self.assertEqual(len(self.app.session_state["path_history"]), 1)
-        self.assertEqual(len(self.app.get("download_button")), 3)
+        self.assertEqual(len(self.app.get("download_button")), 2)
 
     def test_undo_button_works_without_an_api_key(self):
         with patch.dict(os.environ, {"OPENAI_API_KEY": ""}):

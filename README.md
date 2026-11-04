@@ -21,6 +21,7 @@ It combines a **curated dataset** (to prevent AI hallucinations) with a **determ
 - **Shared Undo:** Chat and manual controls share up to 20 session-local revisions. Say “undo that” or click “Undo last change” to restore the previous path, goal, and explanation. The “What changed” view shows actual additions, removals, and moves.
 - **Save and Resume:** Download a session JSON with your path, learning goal, conversation, and undo history. Restore it from the sidebar in a later session without an API key.
 - **Multiple Exports:** Download your curated curriculum as a clean Markdown file or a professional PDF.
+  Choose **Prepare PDF** in the sidebar to generate a PDF, then download it. If generation fails, retry or use Markdown. Editing the path requires preparing a fresh PDF.
 - **Library Stats:** Track your learning ROI with metrics on generated paths and recommended books.
 - **Purchase Links:** Integrated links for direct purchasing when available.
 

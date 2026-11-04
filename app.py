@@ -20,7 +20,7 @@ from src.recommendations import execute_recommendation
 from src.roi import load_stats, increment_stats
 from src.utils import fetch_book_covers
 from src.starter_paths import STARTER_PATHS, build_starter_path
-from src.workspace import commit_path, edit_books, undo_path
+from src.workspace import commit_path, edit_books, undo_path, json_text
 from src.saved_sessions import export_session, import_session
 
 
@@ -571,9 +571,26 @@ if st.session_state.current_path_data:
         mime="text/markdown"
     )
 
-    st.sidebar.download_button(
-        label="Download Curriculum (.pdf)",
-        data=build_pdf_export(data),
-        file_name=f"halchemy_path_{data['category']}.pdf",
-        mime="application/pdf"
-    )
+    pdf_path_key = json_text(data)
+    prepared_pdf = st.session_state.get("prepared_pdf")
+    if prepared_pdf and prepared_pdf["path_key"] != pdf_path_key:
+        st.session_state.pop("prepared_pdf")
+        prepared_pdf = None
+    if not prepared_pdf:
+        if st.sidebar.button("Prepare PDF", key="prepare_pdf"):
+            try:
+                with st.spinner("Preparing PDF..."):
+                    content = build_pdf_export(data)
+            except Exception:
+                logger.exception("Failed to prepare curriculum PDF")
+                st.sidebar.warning("PDF generation failed. Click Prepare PDF to retry, or download Markdown.")
+            else:
+                prepared_pdf = {"path_key": pdf_path_key, "content": content}
+                st.session_state["prepared_pdf"] = prepared_pdf
+    if prepared_pdf:
+        st.sidebar.download_button(
+            label="Download Curriculum (.pdf)",
+            data=prepared_pdf["content"],
+            file_name=f"halchemy_path_{data['category']}.pdf",
+            mime="application/pdf"
+        )
