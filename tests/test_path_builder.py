@@ -13,6 +13,21 @@ from src.llm_client import LLMClientError
 
 
 class TestPathBuilder(unittest.TestCase):
+    def test_empty_path_offers_add_and_undo_without_no_match_warning(self):
+        app = AppTest.from_file("app.py").run()
+        app.button(key="starter_python").click().run()
+        while app.session_state["current_path_data"]["books"]:
+            first_id = app.session_state["current_path_data"]["books"][0]["id"]
+            app.button(key=f"remove_0_{first_id}").click().run()
+        self.assertEqual(len(app.exception), 0)
+        self.assertTrue(any("Your path is empty" in info.value for info in app.info))
+        self.assertFalse(any("matching those exact criteria" in w.value for w in app.warning))
+        self.assertFalse(any("at least 3 books" in w.value for w in app.warning))
+        self.assertFalse(app.button(key="add_book").disabled)
+        app.button(key="undo_empty_path").click().run()
+        self.assertEqual(len(app.session_state["current_path_data"]["books"]), 1)
+        self.assertEqual(len(app.exception), 0)
+
     def test_add_book_without_key_and_undo(self):
         app = AppTest.from_file("app.py").run()
         app.button(key="starter_python").click().run()

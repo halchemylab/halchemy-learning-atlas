@@ -168,7 +168,11 @@ def render_roadmap(path):
 def render_books(path, category):
     """Renders the book cards and hint."""
     if path.empty:
-        st.warning("I couldn't find enough books matching those exact criteria. Try a broader category.")
+        st.info("Your path is empty. Add a book below or undo your last change to restore it.")
+        if st.session_state.get("path_history"):
+            if st.button("Undo last removal", key="undo_empty_path"):
+                undo_path(st.session_state)
+                st.rerun()
         return
 
     st.markdown("### 🎯 Your Custom Reading Path")
@@ -248,7 +252,7 @@ def render_path_editor(data):
     )
     st.markdown("### Edit Path")
 
-    if len(books) < 3:
+    if 0 < len(books) < 3:
         st.warning("Reading paths work best with at least 3 books.")
 
     with st.expander("Add a book", expanded=not books):
