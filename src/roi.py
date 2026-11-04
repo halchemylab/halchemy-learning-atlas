@@ -17,14 +17,13 @@ def load_stats():
     try:
         with open(STATS_FILE, 'r') as f:
             data = json.load(f)
-            # Basic schema check/migration
-            if "paths_generated" not in data:
-                 return DEFAULT_STATS.copy()
-            # Remove 'topics_explored' if it exists from previous runs
-            if "topics_explored" in data:
-                del data["topics_explored"]
-            return data
-    except (json.JSONDecodeError, IOError):
+            if not isinstance(data, dict):
+                return DEFAULT_STATS.copy()
+            return {
+                key: data[key] if type(data.get(key)) is int and data[key] >= 0 else default
+                for key, default in DEFAULT_STATS.items()
+            }
+    except (ValueError, IOError):
         return DEFAULT_STATS.copy()
 
 def increment_stats(num_books=0, category=None):
@@ -43,4 +42,3 @@ def increment_stats(num_books=0, category=None):
         pass 
         
     return stats
-
