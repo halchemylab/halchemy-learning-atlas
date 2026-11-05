@@ -83,6 +83,8 @@ Open a starter path or describe a learning goal in chat. The conversation and wo
 
 Chat searches for candidates before adding new books, validates catalog IDs, and applies one complete change per turn. Questions such as “Why this order?” can be answered without editing. A short explanation follows the actual tool result. If an explanation request fails after a successful edit, the edit is retained and can still be undone.
 
+If a chat request fails, click **Retry last message** to try again without retyping. The retry replaces the error reply and keeps one copy of your message. Changing the path, restoring a session, or sending another message clears the retry. Successful edits with an unavailable explanation do not offer retry, so the edit is not repeated.
+
 The current path and revision history live in the Streamlit session. Choose **Save session (.json)** beside **Undo last change** above your working path to keep a resumable copy of your path, goal, conversation, and up to 20 undo revisions. In a later session, open **Resume a saved session**, upload that JSON, and click **Restore session**. Restoring replaces the current session and requires no API key. Saved files contain your conversation, but no API credentials. Files are limited to 2 MB; books must still exist in the current catalog. Markdown and PDF downloads are readable curriculum copies and include your goal and recommendation warnings. Chat requires an API key; manual editing, undo, and exports do not. Time budgets can be retained in your learning goal, but the catalog has no reading-duration data and the app does not generate a weekly schedule.
 
 ## 🧠 How It Works

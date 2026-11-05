@@ -121,6 +121,7 @@ with st.sidebar.expander("Resume a saved session"):
         except ValueError as exc:
             st.error(str(exc))
         else:
+            st.session_state.pop("failed_chat_turn", None)
             for key, value in restored.items():
                 st.session_state[key] = value
             st.rerun()
@@ -473,13 +474,31 @@ with chat_column:
                     st.markdown(msg["content"])
     if not client:
         st.info("Add an API key in the sidebar to chat. Building paths, manual edits, undo, and downloads work without a key.")
+    # A retry reuses the original user message and replaces only its error reply.
+    # Discard it after another path/conversation action so an old edit cannot replay.
+    workspace_key = json_text({key: st.session_state.get(key) for key in
+                               ("current_path_data", "path_history")})
+    failed_turn = st.session_state.get("failed_chat_turn")
+    if failed_turn and (failed_turn["workspace_key"] != workspace_key
+                        or failed_turn["messages"] != st.session_state.messages):
+        st.session_state.pop("failed_chat_turn", None)
+        failed_turn = None
+    retry_requested = False
+    if failed_turn:
+        retry_requested = st.button("Retry last message", key="retry_chat", disabled=client is None)
     prompt = st.chat_input("What do you want to learn or change about this path?", disabled=client is None)
-    if prompt:
-        st.session_state.messages.append({"role": "user", "content": prompt})
+    if prompt or retry_requested:
+        st.session_state.pop("failed_chat_turn", None)
+        if retry_requested:
+            st.session_state.messages.pop()  # Remove the failed assistant reply.
+        else:
+            st.session_state.messages.append({"role": "user", "content": prompt})
         with thread:
-            with st.chat_message("user"):
-                st.markdown(prompt)
+            if prompt:
+                with st.chat_message("user"):
+                    st.markdown(prompt)
             with st.spinner("Working on your plan..."):
+                failed = False
                 try:
                     result = run_chat_turn(
                         client, st.session_state.messages, st.session_state,
@@ -487,15 +506,27 @@ with chat_column:
                         temperature=st.session_state.temperature,
                     )
                     reply = result["message"]
-                    if result.get("action") == "query_library":
-                        current = st.session_state.current_path_data
-                        increment_stats(num_books=len(current["books"]), category=current["category"])
                 except LLMClientError as exc:
+                    failed = True
                     reply = exc.user_message
                 except Exception:
+                    failed = True
                     logger.exception("Unexpected app error while handling chat input")
                     reply = "I couldn't complete that request. Check the app logs or try again."
+                else:
+                    if result.get("action") == "query_library":
+                        current = st.session_state.current_path_data
+                        try:
+                            increment_stats(num_books=len(current["books"]), category=current["category"])
+                        except Exception:
+                            logger.exception("Failed to update library stats after a successful chat request")
                 st.session_state.messages.append({"role": "assistant", "content": reply})
+                if failed and workspace_key == json_text({key: st.session_state.get(key) for key in
+                                                          ("current_path_data", "path_history")}):
+                    st.session_state.failed_chat_turn = {
+                        "workspace_key": workspace_key,
+                        "messages": deepcopy(st.session_state.messages),
+                    }
         st.rerun()
 
 if has_workspace:

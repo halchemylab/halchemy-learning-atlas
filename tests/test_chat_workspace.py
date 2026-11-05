@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 from streamlit.testing.v1 import AppTest
 
 from src.exports import build_markdown_export
+from src.llm_client import LLMClientError
 
 
 def action(name, arguments):
@@ -62,6 +63,62 @@ class TestChatWorkspace(unittest.TestCase):
         self.completion.side_effect = responses
         self.app.chat_input[0].set_value(message).run()
         self.assertEqual(len(self.app.exception), 0)
+
+    def test_retry_reuses_message_and_replaces_error_until_success(self):
+        self.app.button(key="starter_python").click().run()
+        before = deepcopy(self.app.session_state["current_path_data"])
+        self.send("Move the second book first", [LLMClientError("Connection failed.")])
+        failed_messages = deepcopy(self.app.session_state["messages"])
+        self.completion.side_effect = [LLMClientError("Still unavailable.")]
+        self.app.button(key="retry_chat").click().run()
+        self.assertEqual(len(self.app.exception), 0)
+        self.assertEqual(len(self.app.session_state["messages"]), len(failed_messages))
+        self.assertEqual(self.app.session_state["current_path_data"], before)
+        self.assertEqual(self.app.session_state["messages"][-1]["content"], "Still unavailable.")
+        self.completion.side_effect = [
+            action("edit_path", {"book_ids": [5, 4, 6], "reason": "Moved the second book first."}),
+            answer("Moved the second book first."),
+        ]
+        self.app.button(key="retry_chat").click().run()
+        self.assertEqual(len(self.app.exception), 0)
+        messages = self.app.session_state["messages"]
+        self.assertEqual(sum(m["role"] == "user" for m in messages), 1)
+        self.assertEqual(len(messages), len(failed_messages))
+        self.assertEqual(messages[-1]["content"], "Moved the second book first.")
+        self.assertEqual([b["id"] for b in self.app.session_state["current_path_data"]["books"]], [5, 4, 6])
+        self.assertFalse(any(b.key == "retry_chat" for b in self.app.button))
+        request_messages = self.completion.call_args_list[1].args[1]
+        self.assertEqual(request_messages[-1], {"role": "user", "content": "Move the second book first"})
+        self.assertFalse(any(m.get("content") == "Connection failed." for m in request_messages))
+
+    def test_retry_clears_after_manual_edit_or_new_message(self):
+        self.app.button(key="starter_python").click().run()
+        self.send("Move the second book first", [LLMClientError("Connection failed.")])
+        self.app.button(key="move_down_0_4").click().run()
+        self.assertFalse(any(b.key == "retry_chat" for b in self.app.button))
+        self.send("Why this order?", [LLMClientError("Connection failed.")])
+        self.send("Explain the first book instead", [answer("It introduces the fundamentals.")])
+        self.assertFalse(any(b.key == "retry_chat" for b in self.app.button))
+
+    def test_successful_edit_with_failed_explanation_does_not_offer_retry(self):
+        self.app.button(key="starter_python").click().run()
+        self.send("Move the second book first", [
+            action("edit_path", {"book_ids": [5, 4, 6], "reason": "Moved the second book first."}),
+            LLMClientError("Connection failed."),
+        ])
+        self.assertEqual([b["id"] for b in self.app.session_state["current_path_data"]["books"]], [5, 4, 6])
+        self.assertFalse(any(b.key == "retry_chat" for b in self.app.button))
+
+    def test_unexpected_failure_can_be_retried_without_api_key(self):
+        self.send("Help me learn Python", [RuntimeError("Unexpected failure")])
+        with patch.dict(os.environ, {"OPENAI_API_KEY": ""}):
+            self.app.run()
+            self.assertTrue(self.app.button(key="retry_chat").disabled)
+        self.completion.side_effect = [answer("Let's start with Python fundamentals.")]
+        self.app.run()
+        self.app.button(key="retry_chat").click().run()
+        self.assertEqual(len(self.app.exception), 0)
+        self.assertEqual(sum(m["role"] == "user" for m in self.app.session_state["messages"]), 1)
 
     def test_manual_edit_chat_edit_export_and_both_kinds_of_undo(self):
         self.app.button(key="starter_python").click().run()
