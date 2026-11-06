@@ -2,10 +2,45 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from src.utils import fetch_book_covers
+from src.utils import fetch_book_cover, fetch_book_covers
 
 
 class TestCovers(unittest.TestCase):
+    def test_fetch_book_cover_upgrades_http_to_https(self):
+        with patch("src.utils.requests.get") as mock_get:
+            mock_response = mock_get.return_value
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {
+                "items": [
+                    {
+                        "volumeInfo": {
+                            "imageLinks": {
+                                "thumbnail": "http://books.google.com/books/content?id=xyz&zoom=1"
+                            }
+                        }
+                    }
+                ]
+            }
+            url = fetch_book_cover("Sample Title", "Sample Author")
+            self.assertEqual(url, "https://books.google.com/books/content?id=xyz&zoom=1")
+
+    def test_fetch_book_cover_preserves_https(self):
+        with patch("src.utils.requests.get") as mock_get:
+            mock_response = mock_get.return_value
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {
+                "items": [
+                    {
+                        "volumeInfo": {
+                            "imageLinks": {
+                                "thumbnail": "https://books.google.com/books/content?id=xyz&zoom=1"
+                            }
+                        }
+                    }
+                ]
+            }
+            url = fetch_book_cover("Sample Title", "Sample Author")
+            self.assertEqual(url, "https://books.google.com/books/content?id=xyz&zoom=1")
     def test_covers_run_concurrently_keep_order_and_cache(self):
         fetch_book_covers.clear()
         self.addCleanup(fetch_book_covers.clear)

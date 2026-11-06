@@ -35,7 +35,10 @@ def fetch_book_cover(title, author):
         volume_info = items[0].get("volumeInfo", {})
         image_links = volume_info.get("imageLinks", {})
         # Prefer thumbnail, fallback to smallThumbnail
-        return image_links.get("thumbnail") or image_links.get("smallThumbnail")
+        cover_url = image_links.get("thumbnail") or image_links.get("smallThumbnail")
+        if isinstance(cover_url, str) and cover_url.startswith("http://"):
+            return "https://" + cover_url[len("http://"):]
+        return cover_url
     
     # Return None or a specific placeholder URL if you have one
     # For now, we'll return None and handle it in the UI
